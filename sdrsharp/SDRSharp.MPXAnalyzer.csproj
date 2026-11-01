@@ -32,6 +32,10 @@
       <HintPath>$(SdrSharpDir)/SDRSharp.Common.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="SDRSharp.PanView">
+      <HintPath>$(SdrSharpDir)/SDRSharp.PanView.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="SDRSharp.Radio">
       <HintPath>$(SdrSharpDir)/SDRSharp.Radio.dll</HintPath>
       <Private>false</Private>

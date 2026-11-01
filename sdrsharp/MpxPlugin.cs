@@ -26,6 +26,7 @@ namespace SDRSharp.MPXAnalyzer
 
         // Retune detection, and the frequency for file names (read on the GUI thread, used on the DSP thread)
         long frequency;
+        int themeTicks;
         long measFrequency = -1;
         int measBandwidth = -1;
         double measRate = -1;
@@ -51,6 +52,7 @@ namespace SDRSharp.MPXAnalyzer
         {
             if (gui != null) { return; }
             gui = new ControlPanel(this);
+            Theme.Refresh(control);
 
             // GUI refresh (~30 fps), on the GUI thread
             timer = new System.Windows.Forms.Timer { Interval = 33 };
@@ -73,6 +75,13 @@ namespace SDRSharp.MPXAnalyzer
                 measFrequency = freq;
                 measBandwidth = bw;
                 measRate = rate;
+            }
+
+            // Follow SDR#'s theme and spectrum display settings (checked about once a second)
+            if (++themeTicks >= 30)
+            {
+                themeTicks = 0;
+                if (Theme.Refresh(control) && window != null) { window.ApplyTheme(); }
             }
 
             gui.UpdateStatus();

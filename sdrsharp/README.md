@@ -77,8 +77,9 @@ If SDR# is updated to a new .NET version, rebuild the plugin (or download a newe
 
 1. Tune SDR# to an FM broadcast station in **WFM** mode, and set the filter bandwidth to about 200–250 kHz.
 2. Open the **MPX Analyzer** panel and press **Show MPX window**. The window remembers its position, and reopens with SDR# if it was open when SDR# closed.
-3. Hover over the spectrum to read frequency and level. Enable **Peak hold** to catch transients.
-4. Choose a folder and sample type in the panel, then press **Record MPX**. You can also use the **red record button** at the top right of the MPX window; it turns into a square stop button, with the elapsed time beside it, while recording.
+3. The window follows SDR#'s theme (dark or light, changed while running too) and its spectrum display settings: spectrum style (gradient, solid fill or line), gradient, envelope, fill and peak colours. The peak hold trace uses SDR#'s peak colour.
+4. Hover over the spectrum to read frequency and level. Enable **Peak hold** to catch transients.
+5. Choose a folder and sample type in the panel, then press **Record MPX**. You can also use the **red record button** at the top right of the MPX window; it turns into a square stop button, with the elapsed time beside it, while recording.
 
 ### Panel options
 
@@ -123,7 +124,7 @@ The DSP code has no SDR# dependency and is tested with synthetic FM signals of e
 dotnet run -c Release --project sdrsharp/tests/MpxTests.csproj
 ```
 
-It checks the pilot, RDS (with and without noise), MPX power, deviation (including the peak response times), flatness at 57 kHz, RDS lock detection and the WAV writer. CI also runs `smoketest/`, which loads the plugin with SDR#'s own assemblies on Windows, feeds it a signal through the IQ hook, checks the readings and saves screenshots (artifact `sdrsharp_smoketest_screenshots`).
+It checks the pilot, RDS (with and without noise), MPX power, deviation (including the peak response times), flatness at 57 kHz, RDS lock detection and the WAV writer. CI also runs `smoketest/`, which loads the plugin with SDR#'s own assemblies on Windows, feeds it a signal through the IQ hook, checks the readings and saves screenshots in a dark and a light theme (artifact `sdrsharp_smoketest_screenshots`). `SmokeTest.exe <SDR# assemblies folder> <out> --api-dump` lists SDR#'s theme and colour API.
 
 ## License
 

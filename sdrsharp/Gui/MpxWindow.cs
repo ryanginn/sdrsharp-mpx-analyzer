@@ -19,6 +19,9 @@ namespace SDRSharp.MPXAnalyzer.Gui
         readonly MetersView meters;
         readonly Button resetMeasButton;
         readonly ToolTip toolTip = new ToolTip();
+        readonly TableLayoutPanel toolbar;
+        readonly Label scaleNote;
+        readonly Panel right;
         bool closingForGood;
         bool updating;
 
@@ -29,29 +32,25 @@ namespace SDRSharp.MPXAnalyzer.Gui
             StartPosition = FormStartPosition.CenterScreen;
             ShowInTaskbar = false;
             MinimumSize = new Size(480, 300);
-            BackColor = Theme.Background;
-            ForeColor = Theme.Text;
             FormBorderStyle = FormBorderStyle.SizableToolWindow;
 
             // Toolbar: frequency, info, peak hold, record button
-            var toolbar = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 7, Padding = new Padding(4, 3, 4, 3), BackColor = Theme.Toolbar };
+            toolbar = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 7, Padding = new Padding(4, 3, 4, 3) };
             for (int i = 0; i < 7; i++) { toolbar.ColumnStyles.Add(new ColumnStyle(i == 4 ? SizeType.Percent : SizeType.AutoSize, 100.0f)); }
 
             freqLabel = new Label { AutoSize = true, Anchor = AnchorStyles.Left, Font = new Font(Font.FontFamily, Font.Size * 1.15f, FontStyle.Bold) };
-            infoLabel = new Label { AutoSize = true, Anchor = AnchorStyles.Left, ForeColor = Theme.Dim };
-            peakHoldCheck = new CheckBox { Text = "Peak hold", AutoSize = true, Anchor = AnchorStyles.Left, ForeColor = Theme.Text };
+            infoLabel = new Label { AutoSize = true, Anchor = AnchorStyles.Left };
+            peakHoldCheck = new CheckBox { Text = "Peak hold", AutoSize = true, Anchor = AnchorStyles.Left };
             peakHoldCheck.CheckedChanged += (o, e) =>
             {
                 if (updating) { return; }
                 plugin.Panel?.SetPeakHold(peakHoldCheck.Checked);
             };
             resetPeakButton = new Button { Text = "Reset", AutoSize = true, Anchor = AnchorStyles.Left };
-            Theme.StyleButton(resetPeakButton);
             resetPeakButton.Click += (o, e) => plugin.Chain.ResetPeak();
-            var scaleNote = new Label { Text = "0 dB = 75 kHz dev.", AutoSize = true, Anchor = AnchorStyles.Right, ForeColor = Theme.Dim };
-            recTimeLabel = new Label { AutoSize = true, Anchor = AnchorStyles.Right, ForeColor = Theme.Over };
+            scaleNote = new Label { Text = "0 dB = 75 kHz dev.", AutoSize = true, Anchor = AnchorStyles.Right };
+            recTimeLabel = new Label { AutoSize = true, Anchor = AnchorStyles.Right };
             recordButton = new Button { Size = new Size(26, 26), Anchor = AnchorStyles.Right, Margin = new Padding(6, 0, 0, 0) };
-            Theme.StyleButton(recordButton);
             recordButton.Paint += PaintRecordButton;
             recordButton.Click += (o, e) => plugin.Panel?.ToggleRecording(this);
 
@@ -67,22 +66,40 @@ namespace SDRSharp.MPXAnalyzer.Gui
             spectrum = new SpectrumView { Dock = DockStyle.Fill };
             meters = new MetersView { Dock = DockStyle.Fill };
             resetMeasButton = new Button { Text = "Reset", AutoSize = true, Dock = DockStyle.Bottom };
-            Theme.StyleButton(resetMeasButton);
             resetMeasButton.Click += (o, e) => plugin.Chain.ResetMeasurements();
             toolTip.SetToolTip(resetMeasButton, "Restart the measurements (also done automatically when retuning)");
-            var right = new Panel { Dock = DockStyle.Right, Width = meters.PreferredWidth, Padding = new Padding(0, 4, 4, 4) };
+            right = new Panel { Dock = DockStyle.Right, Width = meters.PreferredWidth, Padding = new Padding(0, 4, 4, 4) };
             right.Controls.Add(meters);
             right.Controls.Add(resetMeasButton);
 
             Controls.Add(spectrum);
             Controls.Add(right);
             Controls.Add(toolbar);
+            ApplyTheme();
+        }
+
+        // SDR#'s theme for the standard controls, then the colours of our own parts. Called again when SDR#'s
+        // theme changes
+        internal void ApplyTheme()
+        {
+            Theme.ApplyTo(this);
+            BackColor = Theme.Background;
+            ForeColor = Theme.Text;
+            toolbar.BackColor = Theme.Toolbar;
+            right.BackColor = Theme.Background;
+            freqLabel.ForeColor = Theme.Text;
+            peakHoldCheck.ForeColor = Theme.Text;
+            infoLabel.ForeColor = Theme.Dim;
+            scaleNote.ForeColor = Theme.Dim;
+            recTimeLabel.ForeColor = Theme.Over;
+            spectrum.Invalidate();
+            meters.Invalidate();
         }
 
         protected override void OnHandleCreated(EventArgs e)
         {
             base.OnHandleCreated(e);
-            Theme.UseDarkTitleBar(Handle);
+            Theme.ApplyTo(this);
         }
 
         void PaintRecordButton(object sender, PaintEventArgs e)

@@ -25,8 +25,6 @@ namespace SDRSharp.MPXAnalyzer.Gui
         public MetersView()
         {
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint | ControlStyles.ResizeRedraw, true);
-            BackColor = Theme.Background;
-            ForeColor = Theme.Text;
             valueFont = new Font(Font.FontFamily, Font.Size * VALUE_FONT_SCALE, FontStyle.Bold);
         }
 
@@ -57,14 +55,14 @@ namespace SDRSharp.MPXAnalyzer.Gui
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics;
-            g.Clear(BackColor);
+            g.Clear(Theme.Background);
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
             tips.Clear();
 
             float x = 4, w = Width - 8, y = 4;
             float lineH = Font.Height + 2;
             float valueH = valueFont.Height + 1;
-            Color dim = Theme.Dim, normal = ForeColor;
+            Color dim = Theme.Dim, normal = Theme.Text;
 
             void Label(string text)
             {

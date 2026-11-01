@@ -16,6 +16,7 @@ using SDRSharp.Radio;
 public class FakeControl : DispatchProxy
 {
     public static object Hook;
+    public static bool Dark = true;
     public static ProcessorType HookType;
 
     protected override object Invoke(MethodInfo method, object[] args)
@@ -33,6 +34,14 @@ public class FakeControl : DispatchProxy
             case "get_FilterBandwidth": return 250000;
             case "get_DetectorType": return DetectorType.WFM;
             case "get_IsPlaying": return true;
+            // Theme, as SDR#'s FluentDark / a light theme would report it
+            case "get_ThemeIsDark": return Dark;
+            case "get_ThemeName": return Dark ? "FluentDark" : "Light";
+            case "get_ThemeForeColor": return Dark ? Color.FromArgb(220, 220, 220) : Color.Black;
+            case "get_ThemeBackColor": return Dark ? Color.Black : Color.White;
+            case "get_ThemePanelColor": return Dark ? Color.FromArgb(24, 24, 24) : Color.FromArgb(240, 240, 240);
+            case "get_SpectrumGradient": return Utils.ParseGradient("FFFFFF,ADD8E6,1E90FF,000050,000000", 255);
+            case "get_FFTSpectrumStyle": return SDRSharp.PanView.SpectrumStyle.StaticGradient;
         }
         var t = method.ReturnType;
         return (t != typeof(void) && t.IsValueType) ? Activator.CreateInstance(t) : null;
@@ -134,6 +143,22 @@ static class Program
         foreach (Form f in Application.OpenForms)
         {
             if (f != host) { Save(f, Path.Combine(outDir, "mpx_window.png")); }
+        }
+
+        // Same window after switching SDR# to a light theme
+        FakeControl.Dark = false;
+        if (SDRSharp.MPXAnalyzer.Gui.Theme.Refresh(control))
+        {
+            foreach (Form f in Application.OpenForms)
+            {
+                if (f is SDRSharp.MPXAnalyzer.Gui.MpxWindow w) { w.ApplyTheme(); w.UpdateView(); }
+            }
+        }
+        wait.Restart();
+        while (wait.Elapsed.TotalSeconds < 0.5) { Application.DoEvents(); Thread.Sleep(10); }
+        foreach (Form f in Application.OpenForms)
+        {
+            if (f != host) { Save(f, Path.Combine(outDir, "mpx_window_light.png")); }
         }
 
         plugin.Close();

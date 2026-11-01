@@ -35,8 +35,6 @@ namespace SDRSharp.MPXAnalyzer.Gui
         public SpectrumView()
         {
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint | ControlStyles.ResizeRedraw, true);
-            BackColor = Theme.Background;
-            ForeColor = Theme.Text;
         }
 
         // Fetches the latest spectrum from the chain. `msg` is shown when there's none
@@ -66,21 +64,20 @@ namespace SDRSharp.MPXAnalyzer.Gui
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics;
-            g.Clear(BackColor);
+            g.Clear(Theme.Background);
             float textH = Font.Height;
             float labelW = g.MeasureString("-100", Font).Width;
 
             var plot = RectangleF.FromLTRB(labelW + 6, textH * 1.5f, Width - 10, Height - textH - 4);
             if (plot.Width < 20 || plot.Height < 20) { return; }
 
-            using (var bg = new SolidBrush(Theme.PlotBackground)) { g.FillRectangle(bg, plot); }
 
             double span = MaxFreqKHz * 1000.0;
             float dbRange = Math.Max(DbMax - DbMin, 1.0f);
             float FToX(double f) => plot.Left + (float)(f / span) * plot.Width;
             float DbToY(float db) => Math.Clamp(plot.Bottom - (db - DbMin) / dbRange * plot.Height, plot.Top, plot.Bottom);
 
-            using var textBrush = new SolidBrush(ForeColor);
+            using var textBrush = new SolidBrush(Theme.Text);
             using var axisBrush = new SolidBrush(Theme.AxisText);
             using var gridPen = new Pen(Theme.Grid);
             using var borderPen = new Pen(Theme.PlotBorder);
@@ -129,13 +126,18 @@ namespace SDRSharp.MPXAnalyzer.Gui
 
             if (valid)
             {
-                // Gradient fill below the average trace (as in SDR#'s spectra), then the lines on top
+                // Fill below the average trace in SDR#'s spectrum style, then the lines on top
                 ComputeTrace(avg, plot, span, DbToY);
                 var area = new PointF[trace.Length + 2];
                 Array.Copy(trace, area, trace.Length);
                 area[trace.Length] = new PointF(trace[trace.Length - 1].X, plot.Bottom);
                 area[trace.Length + 1] = new PointF(trace[0].X, plot.Bottom);
-                using (var fill = Theme.SpectrumFill(plot)) { g.FillPolygon(fill, area); }
+                float traceTop = plot.Bottom;
+                foreach (var p in trace) { traceTop = Math.Min(traceTop, p.Y); }
+                using (var fill = Theme.SpectrumFill(plot, traceTop))
+                {
+                    if (fill != null) { g.FillPolygon(fill, area); }
+                }
                 g.SmoothingMode = SmoothingMode.AntiAlias;
                 if (PeakHold)
                 {
@@ -160,7 +162,7 @@ namespace SDRSharp.MPXAnalyzer.Gui
                 double binHz = MpxChain.SAMPLERATE / MpxChain.FFT_SIZE;
                 double f = (m.X - plot.Left) / plot.Width * span;
                 int bin = Math.Clamp((int)Math.Round(f / binHz), 0, MpxChain.FFT_BINS - 1);
-                using (var cursorPen = new Pen(Color.FromArgb(128, ForeColor))) { g.DrawLine(cursorPen, m.X, plot.Top, m.X, plot.Bottom); }
+                using (var cursorPen = new Pen(Color.FromArgb(128, Theme.Text))) { g.DrawLine(cursorPen, m.X, plot.Top, m.X, plot.Bottom); }
 
                 string text = string.Format("{0:0.00} kHz\nAvg:  {1:0.0} dB", bin * binHz / 1000.0, ToDB(avg[bin]));
                 if (PeakHold) { text += string.Format("\nPeak: {0:0.0} dB", ToDB(peak[bin])); }
@@ -169,7 +171,7 @@ namespace SDRSharp.MPXAnalyzer.Gui
                 if (bx + ts.Width + 6 > plot.Right) { bx = m.X - ts.Width - 12; }
                 if (by + ts.Height + 6 > plot.Bottom) { by = m.Y - ts.Height - 12; }
                 var box = new RectangleF(bx, by, ts.Width + 6, ts.Height + 4);
-                using (var boxBrush = new SolidBrush(Color.FromArgb(230, 45, 45, 50))) { g.FillRectangle(boxBrush, box); }
+                using (var boxBrush = new SolidBrush(Color.FromArgb(230, Theme.Toolbar))) { g.FillRectangle(boxBrush, box); }
                 g.DrawRectangle(gridPen, box.X, box.Y, box.Width, box.Height);
                 g.DrawString(text, Font, textBrush, bx + 3, by + 2);
             }
