@@ -57,16 +57,16 @@ The demodulated signal is resampled from SDR#'s IQ rate (typically 250–500 kS/
 
 ## Requirements
 
-- **SDR#**, current or older. There are two builds of the plugin:
-  - **Current SDR#** (`SDRSharp.dotnet8.exe` / `SDRSharp.dotnet9.exe`): the .NET 8 build, which works with either.
-  - **Older 32-bit SDR#** on .NET Framework (e.g. 1716): the legacy build. Older SDR# has no themes, so the window uses standard Windows colours with a black spectrum, and SDR#'s spectrum gradient and colours from `SDRSharp.exe.config`.
+- **SDR#**, current or old. There are two builds of the plugin; pick by what's in your SDR# folder:
+  - **`SDRSharp.dotnet8.exe` / `SDRSharp.dotnet9.exe`** (current SDR#, both the 64-bit and the 32-bit download): `mpx_analyzer_sdrsharp`.
+  - **A single `SDRSharp.exe` with `SDRSharp.exe.config`** (old SDR# on .NET Framework, e.g. 1716): `mpx_analyzer_sdrsharp_legacy`. Old SDR# has no themes, so the window uses standard Windows colours with a black spectrum, and SDR#'s spectrum gradient and colours from `SDRSharp.exe.config`.
 - A source sample rate high enough for a **200–250 kHz** WFM filter (any Airspy, RTL-SDR at ≥ 1 MS/s, etc.).
 
 ## Installing
 
 **Pre-built (GitHub Actions):** every push builds both versions. Download them from the run's *Artifacts*, or from a GitHub Release:
-- `mpx_analyzer_sdrsharp`: for current SDR#. `SDRSHARP_VERSION.txt` shows which SDR# release it was built against.
-- `mpx_analyzer_sdrsharp_legacy`: for older 32-bit SDR# on .NET Framework (e.g. 1716).
+- `mpx_analyzer_sdrsharp`: for current SDR# (`SDRSharp.dotnet8.exe` / `SDRSharp.dotnet9.exe`), 64-bit and 32-bit. `SDRSHARP_VERSION.txt` shows which SDR# release it was built against.
+- `mpx_analyzer_sdrsharp_legacy`: only for old SDR# on .NET Framework (a single `SDRSharp.exe`, e.g. 1716).
 
 Both contain a file called `SDRSharp.MPXAnalyzer.dll`; use the one that matches your SDR#. Windows may block downloaded DLLs: if the plugin doesn't appear, right-click the DLL → *Properties* → tick *Unblock*.
 
@@ -79,7 +79,7 @@ Both contain a file called `SDRSharp.MPXAnalyzer.dll`; use the one that matches 
 
    If a panel won't dock where you drag it, reset the window arrangement from SDR#'s *Layout* menu.
 
-**Older SDR# (e.g. 1716):**
+**Old SDR# on .NET Framework (e.g. 1716):**
 1. Close SDR#.
 2. Copy `SDRSharp.MPXAnalyzer.dll` into SDR#'s own folder (next to `SDRSharp.exe`).
 3. Add this line inside the `<sharpPlugins>` section of `Plugins.xml`:

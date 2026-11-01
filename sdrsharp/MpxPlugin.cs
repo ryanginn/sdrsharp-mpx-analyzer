@@ -12,11 +12,12 @@ namespace SDRSharp.MPXAnalyzer
     // itself, so the MPX scaling (+/-1.0 = 75kHz deviation) doesn't depend on SDR#'s audio settings.
     //
     // The spectrum is a second plugin in this DLL (MpxSpectrumPlugin), which SDR# docks, closes and lists in its
-    // menu exactly like its own FM MPX Spectrum. SDR# builds that load every plugin in the DLL (current SDR#, 64 and
-    // 32-bit) get that. SDR# builds that only load what Plugins.xml lists (e.g. 1716) only create this plugin, and
-    // then the spectrum is a floating window opened from this panel.
+    // menu exactly like its own FM MPX Spectrum. SDR# builds that load every plugin in the DLL (current SDR#) get
+    // that. SDR# builds that only load what Plugins.xml lists (e.g. 1716) only create this plugin, and then the
+    // spectrum is a floating window opened from this panel.
     //
-    // Built twice: for .NET 8 (current 64-bit SDR#) and for .NET Framework 4.6 (32-bit SDR#, e.g. 1921 x86, 1716).
+    // Built twice: for .NET 8 (current SDR#, SDRSharp.dotnet8/9.exe, 64-bit and 32-bit) and for .NET Framework 4.6
+    // (old SDR# with a single SDRSharp.exe, e.g. 1716).
 #if NETCOREAPP
     public class MpxPlugin : ISharpPlugin, ICanLazyLoadGui, IExtendedNameProvider
 #else
