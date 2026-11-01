@@ -211,6 +211,18 @@ jobs:
           with:
               dotnet-version: ${{ steps.sdrsharp.outputs.dotnet }}
 
+        # TEMPORARY diagnostics (interoperability): how SDR# docks plugin panels. Prints only short excerpts
+        - name: SDR# docking diagnostics
+          continue-on-error: true
+          run: |
+            dotnet tool install -g ilspycmd
+            ilspycmd "${{ steps.sdrsharp.outputs.dir }}/SDRSharp.dll" -o sdr_decomp -p 2>&1 | Select-Object -Last 3
+            $files = Get-ChildItem sdr_decomp -Recurse -Filter *.cs
+            foreach ($pat in @("IPreferedDockPosition", "DockAreas", "RegisterFrontControl", "CloseButton", "\.Category", "HideOnClose", "GetPersistString|PersistString", "DockContent\(")) {
+                "===== $pat"
+                $files | Select-String -Pattern $pat -Context 6,10 | Select-Object -First 12 | ForEach-Object { "--- $($_.Path | Split-Path -Leaf):$($_.LineNumber)"; $_.Context.PreContext; "> " + $_.Line; $_.Context.PostContext }
+            }
+
         # Current SDR# (.NET 8, also loads in SDR#'s .NET 9 build)
         - name: Build (current SDR#)
           run: dotnet build sdrsharp/SDRSharp.MPXAnalyzer.csproj -c Release -f ${{ steps.sdrsharp.outputs.tfm }} "-p:SdrSharpDir=${{ steps.sdrsharp.outputs.dir }}" -o sdrsharp_build
