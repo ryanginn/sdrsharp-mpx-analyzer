@@ -141,7 +141,9 @@ namespace SDRSharp.MPXAnalyzer.Gui
             Dark = isDark;
             if (hasThemes)
             {
-                Background = Valid(back, isDark ? Color.Black : Color.White);
+                // SDR#'s own spectra (IF / Audio / FM MPX) draw on black in the dark themes, whatever the panel colour;
+                // light themes use the theme background
+                Background = isDark ? Color.Black : Valid(back, Color.White);
                 Text = Valid(fore, isDark ? Color.FromArgb(220, 220, 220) : Color.Black);
                 Toolbar = Valid(panel, isDark ? Color.FromArgb(24, 24, 24) : Color.FromArgb(240, 240, 240));
                 ToolbarText = Text;
