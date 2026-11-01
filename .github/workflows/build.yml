@@ -217,6 +217,7 @@ jobs:
         - name: Smoke test
           run: |
             dotnet build sdrsharp/smoketest/SmokeTest.csproj -c Release "-p:SdrSharpDir=${{ steps.sdrsharp.outputs.dir }}" "-p:TargetFramework=${{ steps.sdrsharp.outputs.tfm }}" -o smoketest_build
+            if ($LASTEXITCODE -ne 0) { throw "Smoke test build failed" }
             $p = Start-Process smoketest_build/SmokeTest.exe -ArgumentList "`"${{ steps.sdrsharp.outputs.dir }}`"", "`"$PWD/smoketest_out`"" -Wait -PassThru -NoNewWindow -RedirectStandardOutput smoketest.log
             Get-Content smoketest.log
             if ($p.ExitCode -ne 0) { throw "Smoke test failed" }

@@ -2,7 +2,7 @@
 
   <!-- Windows only: loads the plugin with the real SDR# assemblies and a stand-in for SDR#'s ISharpControl, feeds it
        a synthetic FM signal, checks the readings and saves screenshots of the plugin panel and the MPX window.
-       dotnet run -c Release -p:SdrSharpDir=<SDR# folder> -p:TargetFramework=<SDR#'s tfm>-windows -- <SDR# folder> <output folder> -->
+       Build with -p:SdrSharpDir=(folder with the SDR# assemblies), then run: SmokeTest.exe (that folder) (output folder) -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
