@@ -19,6 +19,7 @@ namespace SDRSharp.MPXAnalyzer.Gui
         readonly NumericUpDown dbMaxUpDown;
         readonly NumericUpDown dbMinUpDown;
         readonly CheckBox peakHoldCheck;
+        readonly CheckBox markersCheck;
         readonly ComboBox unitsCombo;
         readonly ComboBox responseCombo;
         readonly NumericUpDown limitUpDown;
@@ -88,6 +89,14 @@ namespace SDRSharp.MPXAnalyzer.Gui
             resetPeak.Click += (o, e) => plugin.Chain.ResetPeak();
             table.Controls.Add(peakHoldCheck);
             table.Controls.Add(resetPeak);
+
+            markersCheck = new CheckBox { Text = "Show markers (Pilot, 38k, RDS, SCA)", Checked = s.ShowMarkers, AutoSize = true, Anchor = AnchorStyles.Left };
+            markersCheck.CheckedChanged += (o, e) =>
+            {
+                s.ShowMarkers = markersCheck.Checked;
+                plugin.SaveSettings();
+            };
+            AddWide(markersCheck);
 
             unitsCombo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
             unitsCombo.Items.AddRange(new object[] { "kHz", "% (100% = 75 kHz)" });

@@ -34,7 +34,7 @@ namespace SDRSharp.MPXAnalyzer.Gui
             FormBorderStyle = FormBorderStyle.SizableToolWindow;
 
             // Toolbar: frequency, info, peak hold, record button
-            var toolbar = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 7, Padding = new Padding(4, 4, 4, 0) };
+            var toolbar = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 7, Padding = new Padding(4, 3, 4, 3), BackColor = Theme.Toolbar };
             for (int i = 0; i < 7; i++) { toolbar.ColumnStyles.Add(new ColumnStyle(i == 4 ? SizeType.Percent : SizeType.AutoSize, 100.0f)); }
 
             freqLabel = new Label { AutoSize = true, Anchor = AnchorStyles.Left, Font = new Font(Font.FontFamily, Font.Size * 1.15f, FontStyle.Bold) };
@@ -45,12 +45,13 @@ namespace SDRSharp.MPXAnalyzer.Gui
                 if (updating) { return; }
                 plugin.Panel?.SetPeakHold(peakHoldCheck.Checked);
             };
-            resetPeakButton = new Button { Text = "Reset", AutoSize = true, Anchor = AnchorStyles.Left, FlatStyle = FlatStyle.Flat };
+            resetPeakButton = new Button { Text = "Reset", AutoSize = true, Anchor = AnchorStyles.Left };
+            Theme.StyleButton(resetPeakButton);
             resetPeakButton.Click += (o, e) => plugin.Chain.ResetPeak();
             var scaleNote = new Label { Text = "0 dB = 75 kHz dev.", AutoSize = true, Anchor = AnchorStyles.Right, ForeColor = Theme.Dim };
             recTimeLabel = new Label { AutoSize = true, Anchor = AnchorStyles.Right, ForeColor = Theme.Over };
-            recordButton = new Button { Size = new Size(26, 26), Anchor = AnchorStyles.Right, FlatStyle = FlatStyle.Flat, Margin = new Padding(6, 0, 0, 0) };
-            recordButton.FlatAppearance.BorderColor = Theme.Grid;
+            recordButton = new Button { Size = new Size(26, 26), Anchor = AnchorStyles.Right, Margin = new Padding(6, 0, 0, 0) };
+            Theme.StyleButton(recordButton);
             recordButton.Paint += PaintRecordButton;
             recordButton.Click += (o, e) => plugin.Panel?.ToggleRecording(this);
 
@@ -65,7 +66,8 @@ namespace SDRSharp.MPXAnalyzer.Gui
             // Spectrum on the left, meters on the right
             spectrum = new SpectrumView { Dock = DockStyle.Fill };
             meters = new MetersView { Dock = DockStyle.Fill };
-            resetMeasButton = new Button { Text = "Reset", AutoSize = true, Dock = DockStyle.Bottom, FlatStyle = FlatStyle.Flat };
+            resetMeasButton = new Button { Text = "Reset", AutoSize = true, Dock = DockStyle.Bottom };
+            Theme.StyleButton(resetMeasButton);
             resetMeasButton.Click += (o, e) => plugin.Chain.ResetMeasurements();
             toolTip.SetToolTip(resetMeasButton, "Restart the measurements (also done automatically when retuning)");
             var right = new Panel { Dock = DockStyle.Right, Width = meters.PreferredWidth, Padding = new Padding(0, 4, 4, 4) };
@@ -75,6 +77,12 @@ namespace SDRSharp.MPXAnalyzer.Gui
             Controls.Add(spectrum);
             Controls.Add(right);
             Controls.Add(toolbar);
+        }
+
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            Theme.UseDarkTitleBar(Handle);
         }
 
         void PaintRecordButton(object sender, PaintEventArgs e)
@@ -127,6 +135,7 @@ namespace SDRSharp.MPXAnalyzer.Gui
             spectrum.DbMin = s.DbMin;
             spectrum.DbMax = s.DbMax;
             spectrum.PeakHold = s.PeakHold;
+            spectrum.ShowMarkers = s.ShowMarkers;
             spectrum.UpdateData(chain, msg);
 
             meters.LevelPercent = s.LevelPercent;

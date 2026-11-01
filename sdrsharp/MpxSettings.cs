@@ -15,8 +15,9 @@ namespace SDRSharp.MPXAnalyzer
         public float DbMin { get; set; } = -100.0f;
         public float DbMax { get; set; } = 0.0f;
         public bool PeakHold { get; set; }
+        public bool ShowMarkers { get; set; } = true;       // Pilot / 38k / RDS / SCA markers on the spectrum
         public bool LevelPercent { get; set; }
-        public int PeakResponseUs { get; set; }             // Deviation peak response time, 0 = instant
+        public int PeakResponseUs { get; set; } = 125;      // Deviation peak response time, 0 = instant
         public float MpxPowerLimitDBr { get; set; }         // MPX power reading turns amber above this
         public string RecPath { get; set; } = DefaultRecPath;
         public WavSampleType SampleType { get; set; } = WavSampleType.Int16;
@@ -75,7 +76,7 @@ namespace SDRSharp.MPXAnalyzer
             DbMax = Math.Clamp(DbMax, -60.0f, 20.0f);
             DbMin = Math.Clamp(DbMin, -160.0f, -20.0f);
             if (DbMin > DbMax - 10.0f) { DbMin = DbMax - 10.0f; }
-            if (Array.IndexOf(PEAK_RESPONSES_US, PeakResponseUs) < 0) { PeakResponseUs = 0; }
+            if (Array.IndexOf(PEAK_RESPONSES_US, PeakResponseUs) < 0) { PeakResponseUs = 125; }
             MpxPowerLimitDBr = Math.Clamp(MpxPowerLimitDBr, -6.0f, 12.0f);
             if (string.IsNullOrWhiteSpace(RecPath)) { RecPath = DefaultRecPath; }
             if (!Enum.IsDefined(typeof(WavSampleType), SampleType)) { SampleType = WavSampleType.Int16; }

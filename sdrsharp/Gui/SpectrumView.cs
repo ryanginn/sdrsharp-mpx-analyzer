@@ -30,6 +30,7 @@ namespace SDRSharp.MPXAnalyzer.Gui
         public float DbMin = -100.0f;
         public float DbMax = 0.0f;
         public bool PeakHold;
+        public bool ShowMarkers = true;
 
         public SpectrumView()
         {
@@ -69,7 +70,7 @@ namespace SDRSharp.MPXAnalyzer.Gui
             float textH = Font.Height;
             float labelW = g.MeasureString("-100", Font).Width;
 
-            var plot = RectangleF.FromLTRB(labelW + 6, textH * 0.5f, Width - 10, Height - textH - 4);
+            var plot = RectangleF.FromLTRB(labelW + 6, textH * 1.5f, Width - 10, Height - textH - 4);
             if (plot.Width < 20 || plot.Height < 20) { return; }
 
             using (var bg = new SolidBrush(Theme.PlotBackground)) { g.FillRectangle(bg, plot); }
@@ -80,7 +81,12 @@ namespace SDRSharp.MPXAnalyzer.Gui
             float DbToY(float db) => Math.Clamp(plot.Bottom - (db - DbMin) / dbRange * plot.Height, plot.Top, plot.Bottom);
 
             using var textBrush = new SolidBrush(ForeColor);
+            using var axisBrush = new SolidBrush(Theme.AxisText);
             using var gridPen = new Pen(Theme.Grid);
+            using var borderPen = new Pen(Theme.PlotBorder);
+
+            // Unit, above the level axis (SDR#'s spectra show "dBFS" there)
+            g.DrawString("dB", Font, axisBrush, 2, 0);
 
             // Level grid
             float dbStep = dbRange > 100.0f ? 20.0f : 10.0f;
@@ -90,7 +96,7 @@ namespace SDRSharp.MPXAnalyzer.Gui
                 g.DrawLine(gridPen, plot.Left, y, plot.Right, y);
                 string s = db.ToString("0");
                 var ts = g.MeasureString(s, Font);
-                g.DrawString(s, Font, textBrush, plot.Left - ts.Width - 2, y - ts.Height * 0.5f);
+                g.DrawString(s, Font, axisBrush, plot.Left - ts.Width - 2, y - ts.Height * 0.5f);
             }
 
             // Frequency grid
@@ -99,15 +105,16 @@ namespace SDRSharp.MPXAnalyzer.Gui
             {
                 float x = FToX(f);
                 g.DrawLine(gridPen, x, plot.Top, x, plot.Bottom);
-                string s = (f / 1000.0).ToString("0") + "k";
+                string s = (f / 1000.0).ToString("0") + (f > 0.0 ? " k" : "");
                 var ts = g.MeasureString(s, Font);
-                g.DrawString(s, Font, textBrush, Math.Min(x - ts.Width * 0.5f, plot.Right - ts.Width), plot.Bottom + 2);
+                g.DrawString(s, Font, axisBrush, Math.Min(x - ts.Width * 0.5f, plot.Right - ts.Width), plot.Bottom + 2);
             }
 
             var clip = g.Clip;
             g.SetClip(plot);
 
             // Markers for the well known MPX components
+            if (ShowMarkers)
             using (var markerPen = new Pen(Theme.Marker) { DashStyle = DashStyle.Dash })
             using (var markerBrush = new SolidBrush(Theme.Marker))
             {
@@ -122,12 +129,13 @@ namespace SDRSharp.MPXAnalyzer.Gui
 
             if (valid)
             {
-                // Shade below the average trace, then draw the lines on top
+                // Gradient fill below the average trace (as in SDR#'s spectra), then the lines on top
                 ComputeTrace(avg, plot, span, DbToY);
-                using (var fillPen = new Pen(Theme.AvgFill))
-                {
-                    foreach (var p in trace) { g.DrawLine(fillPen, p.X, p.Y, p.X, plot.Bottom); }
-                }
+                var area = new PointF[trace.Length + 2];
+                Array.Copy(trace, area, trace.Length);
+                area[trace.Length] = new PointF(trace[trace.Length - 1].X, plot.Bottom);
+                area[trace.Length + 1] = new PointF(trace[0].X, plot.Bottom);
+                using (var fill = Theme.SpectrumFill(plot)) { g.FillPolygon(fill, area); }
                 g.SmoothingMode = SmoothingMode.AntiAlias;
                 if (PeakHold)
                 {
@@ -136,7 +144,7 @@ namespace SDRSharp.MPXAnalyzer.Gui
                     using (var peakPen = new Pen(Theme.Peak)) { g.DrawLines(peakPen, trace); }
                     trace = avgTrace;
                 }
-                using (var avgPen = new Pen(Theme.Avg)) { g.DrawLines(avgPen, trace); }
+                using (var avgPen = new Pen(Theme.Trace)) { g.DrawLines(avgPen, trace); }
                 g.SmoothingMode = SmoothingMode.None;
             }
             else
@@ -167,7 +175,7 @@ namespace SDRSharp.MPXAnalyzer.Gui
             }
 
             g.Clip = clip;
-            g.DrawRectangle(gridPen, plot.X, plot.Y, plot.Width, plot.Height);
+            g.DrawRectangle(borderPen, plot.X, plot.Y, plot.Width, plot.Height);
         }
 
         // One point per pixel column, showing the highest bin within it so narrow carriers (pilot) never disappear

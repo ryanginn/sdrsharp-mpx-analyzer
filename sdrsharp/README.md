@@ -30,10 +30,10 @@ The demodulated signal is resampled from SDR#'s IQ rate (typically 250–500 kS/
   - **Highlight:** the reading turns amber above the *MPX limit* set in the panel. The default of 0 dBr is the most common limit; some regulators allow +3 or +6 dBr.
 - **Deviation (kHz):** the peak frequency deviation over the last second, plus a max hold. Both turn red above ±75 kHz.
   - **Peak response time:** set in the panel. Regulators and modulation meters don't count very short peaks fully, so the instant reading is usually higher than theirs.
-    - **Instant** (default) is the true sample peak of the demodulated signal. Noise on weak signals and short overshoots push it up.
-    - **125 µs** (common in Europe) and **1 ms** (common in the US) use a quasi-peak detector. It rises toward the signal with that time constant and falls back slowly (1 s time constant), like a PPM. A peak lasting exactly the response time reads 63% of the way from the previous level to the peak. A 50 µs overshoot from 30% to 100% reads 54% at 125 µs and 33% at 1 ms.
+    - **125 µs** (default, common in Europe) and **1 ms** (common in the US) use a quasi-peak detector. It rises toward the signal with that time constant and falls back slowly (1 s time constant), like a PPM. A peak lasting exactly the response time reads 63% of the way from the previous level to the peak. A 50 µs overshoot from 30% to 100% reads 54% at 125 µs and 33% at 1 ms.
     - **Steady tones:** these still read their full peak, within 0.3% at 125 µs and 1.3% at 1 ms.
     - **Repeated peaks:** short peaks that repeat faster than the 1 s fall-back add up, as on any quasi-peak meter.
+    - **Instant** is the true sample peak of the demodulated signal. Noise on weak signals and short overshoots push it up.
     - **Label:** the response time in use is shown in the meter's label, e.g. "Deviation (125 µs)". Changing it restarts the measurements.
 - **Pilot (kHz):** the level of the 19 kHz stereo pilot as deviation, averaged over 1 second. A typical 9% pilot reads 6.75 kHz; hover over it to see it as a percentage.
   - **How:** the MPX is correlated with a 19 kHz reference over 10 ms windows, so stereo audio and noise hardly affect it.
@@ -89,8 +89,9 @@ If SDR# is updated to a new .NET version, rebuild the plugin (or download a newe
 | Max freq | Upper edge of the display (20–96 kHz) |
 | dB max / dB min | Vertical scale |
 | Peak hold | Overlay the maximum level seen since the last reset |
+| Show markers | Show the Pilot / 38k / RDS / SCA markers on the spectrum |
 | Level units | Show deviation, pilot and RDS levels in kHz (default) or percent, where 100% = 75 kHz. Hover over Pilot/RDS to see the other unit |
-| Peak response | Response time of the deviation peak meter: Instant (default), 125 µs (Europe) or 1 ms (US) |
+| Peak response | Response time of the deviation peak meter: 125 µs (default, Europe), 1 ms (US) or Instant |
 | MPX limit (dBr) | MPX power above this is shown in amber (default 0 dBr) |
 | Folder | Where recordings are saved |
 | Sample type | Int16 (default) / Int32 / Float32 WAV samples |
