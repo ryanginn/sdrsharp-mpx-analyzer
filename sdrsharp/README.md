@@ -57,7 +57,7 @@ The demodulated signal is resampled from SDR#'s IQ rate (typically 250–500 kS/
 
 ## Requirements
 
-- A current **SDR#** (.NET build, from about 2020 onwards; the pre-built plugin is built against the release that was current at build time).
+- A current **SDR#**. SDR# comes as `SDRSharp.dotnet8.exe` and `SDRSharp.dotnet9.exe`; the pre-built plugin targets .NET 8, so it works with either. It's built against the SDR# release that was current at build time.
 - A source sample rate high enough for a **200–250 kHz** WFM filter (any Airspy, RTL-SDR at ≥ 1 MS/s, etc.).
 
 ## Installing
@@ -105,11 +105,11 @@ Settings are saved in `MPXAnalyzer.json` in SDR#'s folder (or in `%LOCALAPPDATA%
 
 ## Building
 
-Requires the .NET SDK matching SDR#'s .NET version (see `SDRSharp.runtimeconfig.json` in SDR#'s folder, e.g. `"tfm": "net9.0"`), on Windows.
+Requires the .NET 8 SDK (or newer) on Windows, and SDR#'s `SDRSharp.Common.dll` and `SDRSharp.Radio.dll`. Current SDR# releases are single-file bundles, so extract them from `SDRSharp.dotnet8.exe` first, e.g. with [sfextract](https://github.com/Droppers/SingleFileExtractor) (`dotnet tool install -g sfextract`, then `sfextract SDRSharp.dotnet8.exe -o sdrsharp-bin`).
 
 ```bat
 cd sdrsharp
-dotnet build -c Release -p:SdrSharpDir="C:\path\to\sdrsharp" -p:TargetFramework=net9.0-windows
+dotnet build -c Release -p:SdrSharpDir="C:\path\to\sdrsharp-bin"
 ```
 
 `SdrSharpDir` is the folder with `SDRSharp.Common.dll` and `SDRSharp.Radio.dll` (default `sdrsharp\sdrsharp-bin`). Copy `bin\Release\<framework>\SDRSharp.MPXAnalyzer.dll` into SDR#'s `Plugins` folder.
