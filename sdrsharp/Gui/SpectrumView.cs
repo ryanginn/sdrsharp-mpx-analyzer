@@ -77,7 +77,7 @@ namespace SDRSharp.MPXAnalyzer.Gui
             using var borderPen = new Pen(Theme.PlotBorder);
 
             // Unit, above the level axis (SDR#'s spectra show "dBFS" there)
-            g.DrawString("dB", Font, axisBrush, 2, 0);
+            g.DrawString("dB  (0 dB = 75 kHz deviation)", Font, axisBrush, 2, 0);
 
             // Level grid
             float dbStep = dbRange > 100.0f ? 20.0f : 10.0f;

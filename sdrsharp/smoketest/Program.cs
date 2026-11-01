@@ -45,6 +45,7 @@ public class FakeControl : RealProxy
 public static class FakeSdr
 {
     public static object Hook;
+    public static Control FrontControl;
     public static bool Dark = true;
     public static ProcessorType HookType;
 
@@ -55,6 +56,9 @@ public static class FakeSdr
             case "RegisterStreamHook":
                 Hook = args[0];
                 HookType = (ProcessorType)args[1];
+                return null;
+            case "RegisterFrontControl":
+                FrontControl = (Control)args[0];
                 return null;
             case "UnregisterStreamHook":
                 Hook = null;
@@ -136,7 +140,21 @@ static class Program
         gui.Dock = DockStyle.Top;
         host.Controls.Add(gui);
         host.Show();
-        plugin.ShowWindow(true, host);
+
+#if NETCOREAPP
+        // Current SDR#: the MPX Spectrum plugin panel, hosted here the way SDR# docks plugin panels
+        var spectrumPlugin = new MpxSpectrumPlugin();
+        spectrumPlugin.Initialize(control);
+        Console.WriteLine($"Plugin: {spectrumPlugin.DisplayName} ({spectrumPlugin.Category})");
+        var dockHost = new Form { Text = "MPX Spectrum (dock panel test host)", Width = 900, Height = 280, StartPosition = FormStartPosition.Manual, Location = new Point(300, 10) };
+        var panelGui = spectrumPlugin.Gui;
+        panelGui.Dock = DockStyle.Fill;
+        dockHost.Controls.Add(panelGui);
+        dockHost.Show();
+#else
+        // Older SDR#: floating window
+        plugin.Core.ShowWindow(true, host);
+#endif
 
         // FM signal: 9% pilot, 40% 1kHz tone, 20% 39.5kHz (L-R like), 4% 57kHz tone. Continuous phase like a real
         // transmitter; fed at about real time from a separate thread like SDR#'s DSP thread
@@ -174,9 +192,10 @@ static class Program
         }
 
         int failures = 0;
-        if (plugin.Hook.Error != null) { Console.WriteLine("FAIL: DSP error " + plugin.Hook.Error); failures++; }
-        if (!plugin.Chain.GetMeasurements(out var m)) { Console.WriteLine("FAIL: no measurements"); failures++; }
-        Console.WriteLine($"IQ rate {plugin.Chain.IqRate}, pilot {m.PilotKHz:F3} kHz, peak dev {m.PeakDevKHz:F2} kHz, MPX power {m.PowerDBr:F2} dBr");
+        var core = plugin.Core;
+        if (core.Hook.Error != null) { Console.WriteLine("FAIL: DSP error " + core.Hook.Error); failures++; }
+        if (!core.Chain.GetMeasurements(out var m)) { Console.WriteLine("FAIL: no measurements (spectrum display not detected as visible?)"); failures++; }
+        Console.WriteLine($"IQ rate {core.Chain.IqRate}, pilot {m.PilotKHz:F3} kHz, peak dev {m.PeakDevKHz:F2} kHz, MPX power {m.PowerDBr:F2} dBr");
         if (Math.Abs(m.PilotKHz - 6.75) > 0.05) { Console.WriteLine("FAIL: pilot level"); failures++; }
 
         // Screenshots
@@ -186,22 +205,18 @@ static class Program
             if (f != host) { Save(f, Path.Combine(outDir, "mpx_window.png")); }
         }
 
-        // Same window after switching SDR# to a light theme
+        // Same display after switching SDR# to a light theme (picked up by the plugin within about a second)
         FakeSdr.Dark = false;
-        if (SDRSharp.MPXAnalyzer.Gui.Theme.Refresh(control))
-        {
-            foreach (Form f in Application.OpenForms)
-            {
-                if (f is SDRSharp.MPXAnalyzer.Gui.MpxWindow w) { w.ApplyTheme(); w.UpdateView(); }
-            }
-        }
         wait.Restart();
-        while (wait.Elapsed.TotalSeconds < 0.5) { Application.DoEvents(); Thread.Sleep(10); }
+        while (wait.Elapsed.TotalSeconds < 1.5) { Application.DoEvents(); Thread.Sleep(10); }
         foreach (Form f in Application.OpenForms)
         {
             if (f != host) { Save(f, Path.Combine(outDir, "mpx_window_light.png")); }
         }
 
+#if NETCOREAPP
+        spectrumPlugin.Close();
+#endif
         plugin.Close();
         host.Close();
         Console.WriteLine(failures == 0 ? "Smoke test passed" : "Smoke test FAILED");

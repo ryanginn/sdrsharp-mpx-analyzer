@@ -1,42 +1,31 @@
 using System;
-using System.IO;
-using System.Threading;
 using System.Windows.Forms;
 using SDRSharp.Common;
-using SDRSharp.MPXAnalyzer.Dsp;
 using SDRSharp.MPXAnalyzer.Gui;
-using SDRSharp.Radio;
 
 namespace SDRSharp.MPXAnalyzer
 {
-    // FM MPX spectrum analyzer and recorder for SDR#.
+    // FM MPX spectrum analyzer and recorder for SDR#: the settings and recording panel.
     //
     // The plugin taps SDR#'s decimated and filtered IQ, i.e. the Radio's own channel after its IF filter, so it
     // always follows the frequency and filter bandwidth set in SDR#'s main window. It FM-demodulates that IQ
     // itself, so the MPX scaling (+/-1.0 = 75kHz deviation) doesn't depend on SDR#'s audio settings.
     //
-    // Built twice: for .NET 8 (current SDR#) and for .NET Framework 4.6 (older 32-bit SDR#, e.g. 1716), which
-    // doesn't have the lazy loading and menu name interfaces.
+    // The spectrum is a second plugin in this DLL (MpxSpectrumPlugin), which SDR# docks, closes and lists in its
+    // menu exactly like its own FM MPX Spectrum. SDR# builds that load every plugin in the DLL (current SDR#) get
+    // that. SDR# builds that only load what Plugins.xml lists (e.g. 1716) only create this plugin, and then the
+    // spectrum is a floating window opened from this panel.
+    //
+    // Built twice: for .NET 8 (current SDR#, SDRSharp.dotnet8/9.exe, 64-bit and 32-bit) and for .NET Framework 4.6
+    // (old SDR# with a single SDRSharp.exe, e.g. 1716).
 #if NETCOREAPP
     public class MpxPlugin : ISharpPlugin, ICanLazyLoadGui, IExtendedNameProvider
 #else
     public class MpxPlugin : ISharpPlugin
 #endif
     {
-        ISharpControl control;
-        MpxChain chain;
-        MpxIQHook hook;
-        MpxSettings settings;
+        MpxCore core;
         ControlPanel gui;
-        MpxWindow window;
-        System.Windows.Forms.Timer timer;
-
-        // Retune detection, and the frequency for file names (read on the GUI thread, used on the DSP thread)
-        long frequency;
-        int themeTicks;
-        long measFrequency = -1;
-        int measBandwidth = -1;
-        double measRate = -1;
 
         public string DisplayName => "MPX Analyzer";
 
@@ -58,217 +47,85 @@ namespace SDRSharp.MPXAnalyzer
         public void LoadGui()
         {
             if (gui != null) { return; }
-            gui = new ControlPanel(this);
-            Theme.Refresh(control);
-
-            // GUI refresh (~30 fps), on the GUI thread
-            timer = new System.Windows.Forms.Timer { Interval = 33 };
-            timer.Tick += (s, e) => Tick();
-            timer.Start();
-            if (settings.ShowWindow) { gui.HandleCreated += (s, e) => gui.BeginInvoke(new Action(() => ShowWindow(true, gui.FindForm()))); }
-        }
-
-        void Tick()
-        {
-            Interlocked.Exchange(ref frequency, ReadFrequency());
-            long freq = Frequency;
-
-            // Measurements from a different station or filter setting shouldn't be mixed
-            int bw = FilterBandwidth;
-            double rate = chain.IqRate;
-            if (freq != measFrequency || bw != measBandwidth || rate != measRate)
+            core.StartGui();
+            gui = new ControlPanel(core);
+            core.Panel = gui;
+            // No dock panel (SDR# didn't load MpxSpectrumPlugin): reopen the floating window if it was open
+            gui.HandleCreated += (s, e) => gui.BeginInvoke(new Action(() =>
             {
-                chain.ResetMeasurements();
-                measFrequency = freq;
-                measBandwidth = bw;
-                measRate = rate;
-            }
-
-            // Follow SDR#'s theme and spectrum display settings (checked about once a second)
-            if (++themeTicks >= 30)
-            {
-                themeTicks = 0;
-                if (Theme.Refresh(control) && window != null) { window.ApplyTheme(); }
-            }
-
-            gui.UpdateStatus();
-            if (window != null && window.Visible) { window.UpdateView(); }
+                if (!core.SpectrumPanelLoaded && core.Settings.ShowWindow) { core.ShowWindow(true, gui.FindForm()); }
+            }));
         }
 
         public void Initialize(ISharpControl control)
         {
-            this.control = control;
-            settings = MpxSettings.Load();
-            chain = new MpxChain();
-            chain.SetAveraging(settings.AvgFrames);
-            chain.SetPeakResponse(settings.PeakResponseUs * 1e-6);
-            chain.SetAnalysis(false);   // Until the window is shown
-            hook = new MpxIQHook(chain);
-            control.RegisterStreamHook(hook, ProcessorType.DecimatedAndFilteredIQ);
+            core = MpxCore.Acquire(control);
         }
 
         public void Close()
         {
-            timer?.Stop();
-            if (control != null && hook != null) { control.UnregisterStreamHook(hook); }
-            chain?.StopRecording();
-            if (window != null)
-            {
-                SaveWindowBounds();
-                window.CloseForGood();
-                window = null;
-            }
-            settings?.Save();
+            if (core == null) { return; }
+            if (core.Panel == gui) { core.Panel = null; }
+
+            MpxCore.Release();
+            core = null;
         }
 
-        // ---- Used by the GUI ----
+        internal MpxCore Core => core;
+    }
 
-        internal ISharpControl Control => control;
-        internal MpxChain Chain => chain;
-        internal MpxIQHook Hook => hook;
-        internal MpxSettings Settings => settings;
-        internal ControlPanel Panel => gui;
+    // The spectrum and meters as their own plugin panel. SDR# gives every plugin panel the same dock window as its
+    // built-in FFT panels (FM MPX Spectrum etc.): dockable anywhere including below the waterfall, tabbable,
+    // floatable, closable, and shown/hidden from the Plugins menu
+#if NETCOREAPP
+    public class MpxSpectrumPlugin : ISharpPlugin, ICanLazyLoadGui, IExtendedNameProvider, IPreferedDockPosition
+#else
+    public class MpxSpectrumPlugin : ISharpPlugin
+#endif
+    {
+        MpxCore core;
+        MpxDisplay gui;
 
-        internal void SaveSettings() => settings.Save();
+        public string DisplayName => "MPX Spectrum";
 
-        internal bool WindowVisible => window != null && window.Visible;
+        public string Category => "Analysis";
 
-        internal void ShowWindow(bool show, IWin32Window owner = null)
-        {
-            settings.ShowWindow = show;
-            settings.Save();
-            if (show)
-            {
-                if (window == null || window.IsDisposed)
-                {
-                    window = new MpxWindow(this);
-                    var b = new System.Drawing.Rectangle(settings.WindowX, settings.WindowY, settings.WindowWidth, settings.WindowHeight);
-                    if (settings.WindowX != int.MinValue && IsOnScreen(b))
-                    {
-                        window.StartPosition = FormStartPosition.Manual;
-                        window.Bounds = b;
-                    }
-                    else
-                    {
-                        window.Size = b.Size;
-                    }
-                }
-                chain.SetAnalysis(true);
-                if (!window.Visible)
-                {
-                    if (owner != null) { window.Show(owner); } else { window.Show(); }
-                }
-                window.Activate();
-            }
-            else
-            {
-                chain.SetAnalysis(false);
-                if (window != null && window.Visible)
-                {
-                    SaveWindowBounds();
-                    window.Hide();
-                }
-            }
-        }
+        public string MenuItemName => DisplayName;
 
-        // Called when the user closes the window
-        internal void OnWindowClosed()
-        {
-            SaveWindowBounds();
-            settings.ShowWindow = false;
-            settings.Save();
-            chain.SetAnalysis(false);
-        }
+        public DockStyle DockPosition => DockStyle.Bottom;
 
-        void SaveWindowBounds()
-        {
-            if (window == null || window.WindowState != FormWindowState.Normal) { return; }
-            settings.WindowX = window.Left;
-            settings.WindowY = window.Top;
-            settings.WindowWidth = window.Width;
-            settings.WindowHeight = window.Height;
-        }
+        public bool IsActive => gui != null && gui.Visible;
 
-        static bool IsOnScreen(System.Drawing.Rectangle r)
-        {
-            foreach (var s in Screen.AllScreens)
-            {
-                if (s.WorkingArea.IntersectsWith(new System.Drawing.Rectangle(r.X, r.Y, Math.Min(r.Width, 200), 40))) { return true; }
-            }
-            return false;
-        }
-
-        // Tuned frequency (Hz), as of the last GUI update
-        internal long Frequency => Interlocked.Read(ref frequency);
-
-        long ReadFrequency()
-        {
-            try { return control.Frequency; }
-            catch { return 0; }
-        }
-
-        // SDR#'s IF filter bandwidth (Hz), or 0 if unknown
-        internal int FilterBandwidth
+        public UserControl Gui
         {
             get
             {
-                try { return control.FilterBandwidth; }
-                catch { return 0; }
+                LoadGui();
+                return gui;
             }
         }
 
-        internal bool IsWfm
+        public void LoadGui()
         {
-            get
-            {
-                try { return control.DetectorType == DetectorType.WFM; }
-                catch { return true; }
-            }
+            if (gui != null) { return; }
+            gui = new MpxDisplay(core);
+            core.AddDisplay(gui);
         }
 
-        internal bool IsPlaying
+        public void Initialize(ISharpControl control)
         {
-            get
-            {
-                try { return control.IsPlaying; }
-                catch { return true; }
-            }
+            core = MpxCore.Acquire(control);
+            core.SpectrumPanelLoaded = true;
         }
 
-        internal bool RecordFolderValid => !string.IsNullOrWhiteSpace(settings.RecPath) && Directory.Exists(settings.RecPath);
-
-        // Creates the default folder if needed. Returns false if recording can't start
-        internal bool StartRecording(out string error)
+        public void Close()
         {
-            error = null;
-            Interlocked.Exchange(ref frequency, ReadFrequency());
-            try
-            {
-                if (!Directory.Exists(settings.RecPath)) { Directory.CreateDirectory(settings.RecPath); }
-            }
-            catch (Exception e)
-            {
-                error = "Can't create the recording folder: " + e.Message;
-                return false;
-            }
-            if (!chain.StartRecording(GenFileName, settings.SampleType))
-            {
-                error = chain.RecordingError;
-                return false;
-            }
-            return true;
+            if (core == null) { return; }
+            if (gui != null) { core.RemoveDisplay(gui); }
+            MpxCore.Release();
+            core = null;
         }
 
-        internal void StopRecording() => chain.StopRecording();
-
-        // mpx_<frequency>Hz_<YYYYMMDD>_<HHMMSS>.wav, without overwriting an existing file
-        string GenFileName()
-        {
-            string name = string.Format("mpx_{0}Hz_{1:yyyyMMdd}_{1:HHmmss}", Frequency, DateTime.Now);
-            string basePath = Path.Combine(settings.RecPath, name);
-            string path = basePath + ".wav";
-            for (int i = 1; File.Exists(path); i++) { path = basePath + "_" + i + ".wav"; }
-            return path;
-        }
+        internal MpxCore Core => core;
     }
 }

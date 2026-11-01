@@ -223,7 +223,7 @@ jobs:
             Get-Content smoketest.log
             if ($p.ExitCode -ne 0) { throw "Smoke test failed" }
 
-        # Older 32-bit SDR# on .NET Framework (e.g. 1716). SDR# can't be redistributed, so this builds against the
+        # Old SDR# on .NET Framework (single SDRSharp.exe, e.g. 1716). SDR# can't be redistributed, so this builds against the
         # compile-only stand-ins in sdrsharp/legacy-ref (same API as SDR# 1716, see its README)
         - name: Build (older SDR#, .NET Framework)
           run: |
@@ -245,10 +245,10 @@ jobs:
             mkdir dist, dist_legacy
             cp sdrsharp_build/SDRSharp.MPXAnalyzer.dll dist/
             cp sdrsharp/README.md, LICENSE dist/
-            "For current SDR# (.NET 8 and .NET 9 builds). Built against SDR# ${{ steps.sdrsharp.outputs.version }} (${{ steps.sdrsharp.outputs.tfm }})" | Out-File -Encoding utf8 dist/SDRSHARP_VERSION.txt
+            "For current SDR# (SDRSharp.dotnet8.exe / SDRSharp.dotnet9.exe, 64-bit and 32-bit). Built against SDR# ${{ steps.sdrsharp.outputs.version }} (${{ steps.sdrsharp.outputs.tfm }})" | Out-File -Encoding utf8 dist/SDRSHARP_VERSION.txt
             cp sdrsharp_build_legacy/SDRSharp.MPXAnalyzer.dll dist_legacy/
             cp sdrsharp/README.md, LICENSE dist_legacy/
-            "For older 32-bit SDR# on .NET Framework (e.g. 1716). Install: copy the DLL into SDR#'s folder and add it to Plugins.xml (see README.md)" | Out-File -Encoding utf8 dist_legacy/SDRSHARP_VERSION.txt
+            "Only for old SDR# on .NET Framework (single SDRSharp.exe, e.g. 1716). Current SDR#, including its 32-bit download, needs mpx_analyzer_sdrsharp instead. Install: copy the DLL into SDR#'s folder and add it to Plugins.xml (see README.md)" | Out-File -Encoding utf8 dist_legacy/SDRSHARP_VERSION.txt
             Get-Content dist/SDRSHARP_VERSION.txt, dist_legacy/SDRSHARP_VERSION.txt
 
         - name: Upload (current SDR#)
@@ -306,8 +306,8 @@ jobs:
             | \`mpx_analyzer_windows_x64_${GITHUB_REF_NAME}.zip\` | Windows 64-bit | Copy \`mpx_analyzer.dll\` into SDR++'s \`modules\` folder |
             | \`mpx_analyzer_macos_arm_${GITHUB_REF_NAME}.zip\` | Mac, Apple Silicon | \`xattr -d com.apple.quarantine mpx_analyzer.dylib\`, then copy it to \`/Applications/SDR++.app/Contents/Plugins/\` |
             | \`mpx_analyzer_macos_intel_${GITHUB_REF_NAME}.zip\` | Mac, Intel | As above |
-            | \`mpx_analyzer_sdrsharp_${GITHUB_REF_NAME}.zip\` | Current SDR# (.NET 8/9) | Copy \`SDRSharp.MPXAnalyzer.dll\` into SDR#'s \`Plugins\` folder |
-            | \`mpx_analyzer_sdrsharp_legacy_${GITHUB_REF_NAME}.zip\` | Older 32-bit SDR# (.NET Framework, e.g. 1716) | Copy \`SDRSharp.MPXAnalyzer.dll\` into SDR#'s folder and add it to \`Plugins.xml\` (see README) |
+            | \`mpx_analyzer_sdrsharp_${GITHUB_REF_NAME}.zip\` | Current SDR# (.NET 8/9, 64-bit and 32-bit) | Copy \`SDRSharp.MPXAnalyzer.dll\` into SDR#'s \`Plugins\` folder |
+            | \`mpx_analyzer_sdrsharp_legacy_${GITHUB_REF_NAME}.zip\` | Old SDR# on .NET Framework only (single SDRSharp.exe, e.g. 1716) | Copy \`SDRSharp.MPXAnalyzer.dll\` into SDR#'s folder and add it to \`Plugins.xml\` (see README) |
 
             Linux: build from source, see the README. Then start SDR++ and add an \`mpx_analyzer\` instance in Module Manager.
             EOF

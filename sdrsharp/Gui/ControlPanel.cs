@@ -9,9 +9,10 @@ namespace SDRSharp.MPXAnalyzer.Gui
     // The plugin's section in SDR#'s side panel: display and recording settings
     public sealed class ControlPanel : UserControl
     {
-        readonly MpxPlugin plugin;
+        readonly MpxCore plugin;
         readonly TableLayoutPanel table;
-        readonly Button showButton;
+        readonly Button showButton;     // Floating window, when there's no dock panel
+        readonly Label dockHint;
         readonly Label statusLabel;
         readonly Label warnLabel;
         readonly NumericUpDown avgUpDown;
@@ -31,7 +32,7 @@ namespace SDRSharp.MPXAnalyzer.Gui
         readonly ToolTip toolTip = new ToolTip();
         bool updating;
 
-        public ControlPanel(MpxPlugin plugin)
+        internal ControlPanel(MpxCore plugin)
         {
             this.plugin = plugin;
             var s = plugin.Settings;
@@ -47,6 +48,10 @@ namespace SDRSharp.MPXAnalyzer.Gui
             table.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100.0f));
 
+            // With the MPX Spectrum dock panel: a hint where to find it. Without (SDR# that doesn't load it, e.g.
+            // 1716): a button for the floating window. Which one applies is set in UpdateStatus
+            dockHint = new Label { Text = "Spectrum and meters: Plugins menu > MPX Spectrum. Dock it like SDR#'s own spectra.", AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(3, 3, 3, 6), MaximumSize = new Size(260, 0) };
+            AddWide(dockHint);
             showButton = new Button { Text = "Show MPX window", Dock = DockStyle.Fill, AutoSize = true };
             showButton.Click += (o, e) => plugin.ShowWindow(!plugin.WindowVisible, FindForm());
             AddWide(showButton);
@@ -83,7 +88,7 @@ namespace SDRSharp.MPXAnalyzer.Gui
             peakHoldCheck.CheckedChanged += (o, e) =>
             {
                 if (updating) { return; }
-                SetPeakHold(peakHoldCheck.Checked);
+                plugin.SetPeakHold(peakHoldCheck.Checked);
             };
             var resetPeak = new Button { Text = "Reset peak", AutoSize = true, Anchor = AnchorStyles.Right };
             resetPeak.Click += (o, e) => plugin.Chain.ResetPeak();
@@ -153,7 +158,7 @@ namespace SDRSharp.MPXAnalyzer.Gui
             AddRow("Sample type", typeCombo, "Int16/Int32 clip at 75 kHz deviation, Float32 doesn't");
 
             recordButton = new Button { Text = "Record MPX", Dock = DockStyle.Fill, AutoSize = true };
-            recordButton.Click += (o, e) => ToggleRecording(this);
+            recordButton.Click += (o, e) => plugin.ToggleRecording(FindForm());
             AddWide(recordButton);
             recLabel = new Label { AutoSize = true, Dock = DockStyle.Fill, Text = "Idle --:--:--" };
             AddWide(recLabel);
@@ -204,16 +209,8 @@ namespace SDRSharp.MPXAnalyzer.Gui
             plugin.SaveSettings();
         }
 
-        // Peak hold can also be changed from the MPX window
-        internal void SetPeakHold(bool on)
-        {
-            plugin.Settings.PeakHold = on;
-            plugin.Chain.ResetPeak();
-            plugin.SaveSettings();
-            SyncFromSettings();
-        }
-
-        void SyncFromSettings()
+        // Also called when peak hold is changed from the MPX display
+        internal void SyncFromSettings()
         {
             var s = plugin.Settings;
             updating = true;
@@ -249,23 +246,8 @@ namespace SDRSharp.MPXAnalyzer.Gui
             }
         }
 
-        // Shared with the MPX window's record button
-        internal void ToggleRecording(IWin32Window owner)
-        {
-            if (plugin.Chain.IsRecording)
-            {
-                plugin.StopRecording();
-            }
-            else
-            {
-                FolderChanged(folderBox.Text);
-                if (!plugin.StartRecording(out string error))
-                {
-                    MessageBox.Show(owner, error, "MPX Analyzer", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                }
-            }
-            UpdateStatus();
-        }
+        // Before recording: a folder typed in but not confirmed yet
+        internal void CommitFolder() => FolderChanged(folderBox.Text);
 
         internal static string FormatTime(long samples)
         {
@@ -277,6 +259,9 @@ namespace SDRSharp.MPXAnalyzer.Gui
         internal void UpdateStatus()
         {
             var chain = plugin.Chain;
+            bool docked = plugin.SpectrumPanelLoaded;
+            dockHint.Visible = docked;
+            showButton.Visible = !docked;
             showButton.Text = plugin.WindowVisible ? "Hide MPX window" : "Show MPX window";
 
             double rate = chain.IqRate;

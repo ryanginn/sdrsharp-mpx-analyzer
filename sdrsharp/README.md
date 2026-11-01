@@ -45,7 +45,7 @@ The demodulated signal is resampled from SDR#'s IQ rate (typically 250–500 kS/
   - **Readings:** *Yes* with the phase offset (e.g. "Yes +2°"), green when within tolerance and amber when not. *No* (amber) means the RDS encoder isn't locked to the pilot. *n/a* means there is no pilot or no RDS.
   - **How:** squaring the RDS signal removes its data and leaves the carrier phase. This is compared with 3× the pilot phase every 10 ms and averaged over 5 seconds. Hover for the exact phase and the stability figure (locked above 0.90).
   - **180° ambiguity:** RDS's data modulation hides 180° phase steps, so the offset is shown in the range −90° to +90°.
-- **CPU use:** the spectrum and measurements are only computed while the MPX window is open. Recording carries on when it's closed. Reopening the window restarts the measurements.
+- **CPU use:** the spectrum and measurements are only computed while the MPX Spectrum panel (or window) is on screen. Recording carries on when it's closed or hidden behind another tab. Showing it again restarts the measurements.
 - **Reset:** the measurements restart automatically when the frequency, the filter bandwidth or the IQ rate changes. *Reset* under the meters restarts them by hand.
 - **Accuracy:** a slow DC filter removes any carrier offset first, so slight mistuning doesn't affect the readings. SDR#'s IF filter does affect them; use a wide bandwidth on a clean signal for measurements.
 
@@ -57,25 +57,29 @@ The demodulated signal is resampled from SDR#'s IQ rate (typically 250–500 kS/
 
 ## Requirements
 
-- **SDR#**, current or older. There are two builds of the plugin:
-  - **Current SDR#** (`SDRSharp.dotnet8.exe` / `SDRSharp.dotnet9.exe`): the .NET 8 build, which works with either.
-  - **Older 32-bit SDR#** on .NET Framework (e.g. 1716): the legacy build. Older SDR# has no themes, so the window uses standard Windows colours with a black spectrum, and SDR#'s spectrum gradient and colours from `SDRSharp.exe.config`.
+- **SDR#**, current or old. There are two builds of the plugin; pick by what's in your SDR# folder:
+  - **`SDRSharp.dotnet8.exe` / `SDRSharp.dotnet9.exe`** (current SDR#, both the 64-bit and the 32-bit download): `mpx_analyzer_sdrsharp`.
+  - **A single `SDRSharp.exe` with `SDRSharp.exe.config`** (old SDR# on .NET Framework, e.g. 1716): `mpx_analyzer_sdrsharp_legacy`. Old SDR# has no themes, so the window uses standard Windows colours with a black spectrum, and SDR#'s spectrum gradient and colours from `SDRSharp.exe.config`.
 - A source sample rate high enough for a **200–250 kHz** WFM filter (any Airspy, RTL-SDR at ≥ 1 MS/s, etc.).
 
 ## Installing
 
 **Pre-built (GitHub Actions):** every push builds both versions. Download them from the run's *Artifacts*, or from a GitHub Release:
-- `mpx_analyzer_sdrsharp`: for current SDR#. `SDRSHARP_VERSION.txt` shows which SDR# release it was built against.
-- `mpx_analyzer_sdrsharp_legacy`: for older 32-bit SDR# on .NET Framework (e.g. 1716).
+- `mpx_analyzer_sdrsharp`: for current SDR# (`SDRSharp.dotnet8.exe` / `SDRSharp.dotnet9.exe`), 64-bit and 32-bit. `SDRSHARP_VERSION.txt` shows which SDR# release it was built against.
+- `mpx_analyzer_sdrsharp_legacy`: only for old SDR# on .NET Framework (a single `SDRSharp.exe`, e.g. 1716).
 
 Both contain a file called `SDRSharp.MPXAnalyzer.dll`; use the one that matches your SDR#. Windows may block downloaded DLLs: if the plugin doesn't appear, right-click the DLL → *Properties* → tick *Unblock*.
 
 **Current SDR#:**
 1. Close SDR#.
 2. Copy `SDRSharp.MPXAnalyzer.dll` into SDR#'s `Plugins` folder.
-3. Start SDR#. **MPX Analyzer** appears in the plugin list (left-hand menu, *Analysis* category).
+3. Start SDR#. The *Plugins* menu has two new panels, *Analysis : MPX Analyzer* and *Analysis : MPX Spectrum*. Tick one to show it, untick it to hide it:
+   - **MPX Spectrum**: the spectrum and meters. It's a dock panel like SDR#'s built-in FM MPX Spectrum: drag its tab to dock it, e.g. below the waterfall next to the other spectra, tab it, float it or close it.
+   - **MPX Analyzer**: the settings and recording.
 
-**Older SDR# (e.g. 1716):**
+   If a panel won't dock where you drag it, reset the window arrangement from SDR#'s *Layout* menu.
+
+**Old SDR# on .NET Framework (e.g. 1716):**
 1. Close SDR#.
 2. Copy `SDRSharp.MPXAnalyzer.dll` into SDR#'s own folder (next to `SDRSharp.exe`).
 3. Add this line inside the `<sharpPlugins>` section of `Plugins.xml`:
@@ -90,16 +94,24 @@ If SDR# is updated to a new .NET version, rebuild the plugin (or download a newe
 ## Usage
 
 1. Tune SDR# to an FM broadcast station in **WFM** mode, and set the filter bandwidth to about 200–250 kHz.
-2. Open the **MPX Analyzer** panel and press **Show MPX window**. The window remembers its position, and reopens with SDR# if it was open when SDR# closed.
-3. The window follows SDR#'s theme (dark or light, changed while running too) and its spectrum display settings: spectrum style (gradient, solid fill or line), gradient, envelope, fill and peak colours. The peak hold trace uses SDR#'s peak colour.
-4. Hover over the spectrum to read frequency and level. Enable **Peak hold** to catch transients.
-5. Choose a folder and sample type in the panel, then press **Record MPX**. You can also use the **red record button** at the top right of the MPX window; it turns into a square stop button, with the elapsed time beside it, while recording.
+2. Open the spectrum:
+   - **Current SDR#:** open *Plugins* → *Analysis : MPX Spectrum*, then dock it where you like. SDR# remembers the layout.
+   - **Older SDR#** (no dock panels): open the **MPX Analyzer** panel and press **Show MPX window**. The window remembers its position, and reopens with SDR# if it was open when SDR# closed.
+3. The spectrum follows SDR#'s theme (dark or light, changed while running too) and its spectrum display settings: spectrum style (gradient, solid fill or line), gradient, envelope, fill and peak colours, drawn the way SDR#'s own spectra draw them. The peak hold trace uses SDR#'s peak colour.
+4. The spectrum uses the panel's full height. The column on its right has:
+   - the record button at the top
+   - the readings
+   - **Peak hold** (with *Clear*) and **Reset** at the bottom
+
+   Frequency and filter aren't repeated there, since SDR# shows them.
+5. Hover over the spectrum to read frequency and level. Enable **Peak hold** to catch transients.
+6. Choose a folder and sample type in the MPX Analyzer panel, then press **Record MPX**, or use the **red record button** above the readings. It turns into a square stop button while recording, with the elapsed time beside it.
 
 ### Panel options
 
 | Option | Description |
 |---|---|
-| Show MPX window | Opens or hides the spectrum and measurements window |
+| Show MPX window | Older SDR# only: opens or hides the spectrum window (current SDR# has the MPX Spectrum dock panel instead) |
 | Averaging | Number of FFT frames averaged (about 94 frames/s) |
 | Max freq | Upper edge of the display (20–96 kHz) |
 | dB max / dB min | Vertical scale |
