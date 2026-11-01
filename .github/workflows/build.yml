@@ -218,10 +218,13 @@ jobs:
             dotnet tool install -g ilspycmd
             ilspycmd "${{ steps.sdrsharp.outputs.dir }}/SDRSharp.dll" -o sdr_decomp -p 2>&1 | Select-Object -Last 3
             $files = Get-ChildItem sdr_decomp -Recurse -Filter *.cs
-            foreach ($pat in @("IPreferedDockPosition", "DockAreas", "RegisterFrontControl", "CloseButton", "\.Category", "HideOnClose", "GetPersistString|PersistString", "DockContent\(")) {
-                "===== $pat"
-                $files | Select-String -Pattern $pat -Context 6,10 | Select-Object -First 12 | ForEach-Object { "--- $($_.Path | Split-Path -Leaf):$($_.LineNumber)"; $_.Context.PreContext; "> " + $_.Line; $_.Context.PostContext }
-            }
+            $main = Get-ChildItem sdr_decomp -Recurse -Filter MainForm.cs | Select-Object -First 1
+            "===== DockState / Show / layout lines in MainForm"
+            Select-String -Path $main.FullName -Pattern "DockState\.|\.Show\(dockPanel|LoadFromXml|SaveAsXml|GetContentFromPersistString|IsHidden|IsDocumentWindow|DockPanel\.Contents|FloatPane|\.Pane\b|DefaultDockLocation|ShowHint|DockTo\(" | ForEach-Object { "{0}: {1}" -f $_.LineNumber, $_.Line.Trim() }
+            "===== GetContentFromPersistString body"
+            $lines = Get-Content $main.FullName
+            $i = ($lines | Select-String -Pattern "GetContentFromPersistString\(string" | Select-Object -First 1).LineNumber
+            if ($i) { $lines[($i-1)..($i+45)] }
 
         # Current SDR# (.NET 8, also loads in SDR#'s .NET 9 build)
         - name: Build (current SDR#)
