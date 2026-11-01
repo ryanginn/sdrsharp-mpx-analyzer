@@ -36,7 +36,7 @@ namespace SDRSharp.MPXAnalyzer.Gui
 
             spectrum = new SpectrumView { Dock = DockStyle.Fill };
             meters = new MetersView { Dock = DockStyle.Fill };
-            int rightWidth = Math.Max(meters.PreferredWidth, (int)(Font.Height * 11.5f));
+            int rightWidth = meters.PreferredWidth;
 
             // Top of the meters column: record button and elapsed time
             recRow = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 2, Margin = new Padding(0) };
@@ -65,11 +65,14 @@ namespace SDRSharp.MPXAnalyzer.Gui
             peakRow.Controls.Add(peakHoldCheck, 0, 0);
             peakRow.Controls.Add(resetPeakButton, 1, 0);
 
+            // Just as wide as the readings need (and the peak hold row)
+            rightWidth = Math.Max(rightWidth, peakHoldCheck.PreferredSize.Width + resetPeakButton.PreferredSize.Width + 12);
+
             resetMeasButton = new Button { Text = "Reset", AutoSize = true, Dock = DockStyle.Bottom };
             resetMeasButton.Click += (o, e) => core.Chain.ResetMeasurements();
             toolTip.SetToolTip(resetMeasButton, "Restart the measurements (also done automatically when retuning)");
 
-            right = new Panel { Dock = DockStyle.Right, Width = rightWidth, Padding = new Padding(0, 2, 4, 4) };
+            right = new Panel { Dock = DockStyle.Right, Width = rightWidth + 4, Padding = new Padding(0, 2, 4, 4) };
             right.Controls.Add(meters);
             right.Controls.Add(recRow);
             right.Controls.Add(peakRow);
