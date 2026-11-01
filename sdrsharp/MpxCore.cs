@@ -81,6 +81,10 @@ namespace SDRSharp.MPXAnalyzer
         public MpxSettings Settings => settings;
         public ControlPanel Panel { get; set; }
 
+        // SDR# loaded the MPX Spectrum dock panel plugin. If not (SDR# that only loads the plugins listed in
+        // Plugins.xml, e.g. 1716), the spectrum is shown in a floating window instead
+        public bool SpectrumPanelLoaded { get; set; }
+
         public void SaveSettings() => settings.Save();
 
         // ---- GUI refresh ----

@@ -211,6 +211,18 @@ jobs:
           with:
               dotnet-version: ${{ steps.sdrsharp.outputs.dotnet }}
 
+        # Which .NET the 32-bit SDR# download uses (it needs the .NET Framework build of the plugin if it's .NET Framework)
+        - name: Check 32-bit SDR#
+          continue-on-error: true
+          run: |
+            Invoke-WebRequest -Uri "https://airspy.com/downloads/sdrsharp-x86.zip" -OutFile sdrsharp_x86.zip -UserAgent "Mozilla/5.0"
+            Expand-Archive sdrsharp_x86.zip -DestinationPath sdrsharp_x86
+            Get-ChildItem sdrsharp_x86 -Recurse -Include "SDRSharp*.exe", "SDRSharp.Common.dll", "*.config" | ForEach-Object {
+                $t = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($_.FullName))
+                $fw = [regex]::Match($t, '\.NET(Framework|CoreApp),Version=v[0-9.]+').Value
+                "{0,-40} {1,10} {2} {3}" -f $_.Name, $_.Length, $_.VersionInfo.FileVersion, $fw
+            }
+
         # Current SDR# (.NET 8, also loads in SDR#'s .NET 9 build)
         - name: Build (current SDR#)
           run: dotnet build sdrsharp/SDRSharp.MPXAnalyzer.csproj -c Release -f ${{ steps.sdrsharp.outputs.tfm }} "-p:SdrSharpDir=${{ steps.sdrsharp.outputs.dir }}" -o sdrsharp_build

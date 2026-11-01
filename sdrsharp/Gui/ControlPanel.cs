@@ -11,7 +11,8 @@ namespace SDRSharp.MPXAnalyzer.Gui
     {
         readonly MpxCore plugin;
         readonly TableLayoutPanel table;
-        Button showButton = null;      // Older SDR# only (floating window)
+        readonly Button showButton;     // Floating window, when there's no dock panel
+        readonly Label dockHint;
         readonly Label statusLabel;
         readonly Label warnLabel;
         readonly NumericUpDown avgUpDown;
@@ -47,17 +48,13 @@ namespace SDRSharp.MPXAnalyzer.Gui
             table.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100.0f));
 
-#if NETCOREAPP
-            // Current SDR#: the spectrum is its own plugin panel (MPX Spectrum), like SDR#'s FM MPX Spectrum
-            var hint = new Label { Text = "Spectrum and meters: Plugins menu > Analysis : MPX Spectrum. Dock it like SDR#'s own spectra.", AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(3, 3, 3, 6) };
-            hint.MaximumSize = new Size(260, 0);
-            AddWide(hint);
-#else
-            // Older SDR#: no dock panels, the spectrum is a floating window
+            // With the MPX Spectrum dock panel: a hint where to find it. Without (SDR# that doesn't load it, e.g.
+            // 1716): a button for the floating window. Which one applies is set in UpdateStatus
+            dockHint = new Label { Text = "Spectrum and meters: Plugins menu > MPX Spectrum. Dock it like SDR#'s own spectra.", AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(3, 3, 3, 6), MaximumSize = new Size(260, 0) };
+            AddWide(dockHint);
             showButton = new Button { Text = "Show MPX window", Dock = DockStyle.Fill, AutoSize = true };
             showButton.Click += (o, e) => plugin.ShowWindow(!plugin.WindowVisible, FindForm());
             AddWide(showButton);
-#endif
 
             statusLabel = new Label { AutoSize = true, Dock = DockStyle.Fill, ForeColor = SystemColors.GrayText };
             AddWide(statusLabel);
@@ -262,7 +259,10 @@ namespace SDRSharp.MPXAnalyzer.Gui
         internal void UpdateStatus()
         {
             var chain = plugin.Chain;
-            if (showButton != null) { showButton.Text = plugin.WindowVisible ? "Hide MPX window" : "Show MPX window"; }
+            bool docked = plugin.SpectrumPanelLoaded;
+            dockHint.Visible = docked;
+            showButton.Visible = !docked;
+            showButton.Text = plugin.WindowVisible ? "Hide MPX window" : "Show MPX window";
 
             double rate = chain.IqRate;
             int bw = plugin.FilterBandwidth;
