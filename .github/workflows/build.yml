@@ -222,6 +222,15 @@ jobs:
             Get-Content smoketest.log
             if ($p.ExitCode -ne 0) { throw "Smoke test failed" }
 
+        # Diagnostics: SDR#'s theme/colour API and default settings
+        - name: SDR# API dump
+          if: always()
+          continue-on-error: true
+          run: |
+            Get-ChildItem sdrsharp_dist -Recurse -Filter "SDRSharp.config" | ForEach-Object { Get-Content $_.FullName }
+            $p = Start-Process smoketest_build/SmokeTest.exe -ArgumentList "`"${{ steps.sdrsharp.outputs.dir }}`"", "`"$PWD/smoketest_out`"", "--api-dump" -Wait -PassThru -NoNewWindow -RedirectStandardOutput apidump.log
+            Get-Content apidump.log
+
         - name: Package
           run: |
             mkdir dist

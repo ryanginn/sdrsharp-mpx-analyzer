@@ -58,6 +58,7 @@ static class Program
         };
         try
         {
+            if (args.Length > 2 && args[2] == "--api-dump") { return DumpApi(sdrDir); }
             return Run(outDir);
         }
         catch (Exception e)
@@ -139,6 +140,53 @@ static class Program
         host.Close();
         Console.WriteLine(failures == 0 ? "Smoke test passed" : "Smoke test FAILED");
         return failures == 0 ? 0 : 1;
+    }
+
+    // Lists SDR#'s public API related to themes and colours (to follow SDR#'s theme)
+    static int DumpApi(string sdrDir)
+    {
+        var flags = BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.DeclaredOnly;
+        var rx = new System.Text.RegularExpressions.Regex("Theme|Color|Colour|Gradient|Skin|Style|Palette|Dark|Brush", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        foreach (var file in Directory.GetFiles(sdrDir, "SDRSharp*.dll"))
+        {
+            Assembly asm;
+            try { asm = AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.GetFullPath(file)); }
+            catch (Exception e) { Console.WriteLine($"## {Path.GetFileName(file)}: {e.Message}"); continue; }
+            Console.WriteLine($"## {asm.GetName().Name}");
+            Type[] types;
+            try { types = asm.GetExportedTypes(); }
+            catch (ReflectionTypeLoadException e) { types = Array.FindAll(e.Types, t => t != null && t.IsPublic); }
+            catch (Exception e) { Console.WriteLine("  " + e.Message); continue; }
+            foreach (var t in types)
+            {
+                bool all = rx.IsMatch(t.Name) || t.Name == "ISharpControl" || t.Name == "Utils";
+                var lines = new System.Collections.Generic.List<string>();
+                try
+                {
+                    foreach (var m in t.GetMembers(flags))
+                    {
+                        if (m is MethodInfo mi && mi.IsSpecialName) { continue; }
+                        string sig = m switch
+                        {
+                            PropertyInfo pi => $"prop {pi.PropertyType.Name} {pi.Name}",
+                            FieldInfo fi => $"field {fi.FieldType.Name} {fi.Name}" + (fi.IsLiteral ? " = " + fi.GetRawConstantValue() : ""),
+                            MethodInfo mi2 => $"method {mi2.ReturnType.Name} {mi2.Name}({string.Join(", ", Array.ConvertAll(mi2.GetParameters(), p => p.ParameterType.Name + " " + p.Name))})",
+                            EventInfo ei => $"event {ei.EventHandlerType?.Name} {ei.Name}",
+                            _ => null
+                        };
+                        if (sig != null && (all || rx.IsMatch(sig))) { lines.Add("    " + (m is FieldInfo f2 && f2.IsStatic || m is MethodInfo m2 && m2.IsStatic ? "static " : "") + sig); }
+                    }
+                }
+                catch (Exception e) { lines.Add("    (" + e.Message + ")"); }
+                if (all || lines.Count > 0)
+                {
+                    Console.WriteLine($"  {(t.IsInterface ? "interface" : t.IsEnum ? "enum" : "type")} {t.FullName} : {t.BaseType?.Name}");
+                    if (t.IsEnum) { Console.WriteLine("    " + string.Join(", ", Enum.GetNames(t))); }
+                    foreach (var l in lines) { Console.WriteLine(l); }
+                }
+            }
+        }
+        return 0;
     }
 
     static void Save(Form f, string path)
