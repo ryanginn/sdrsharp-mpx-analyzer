@@ -1,7 +1,7 @@
 # MPX Analyzer for SDR++ and SDR#
 
 
-<img width="1920" height="1032" alt="image" src="https://github.com/user-attachments/assets/d141f734-93bc-430b-9aaf-e3d80e8e07d2" />
+<img width="1920" height="1032" alt="image" src="https://github.com/user-attachments/assets/0c3f65ec-dc24-42ed-87e4-273b3408b95d" />
 
 
 > **SDR# users:** see [`sdrsharp/README.md`](sdrsharp/README.md) for the SDR# plugin (`SDRSharp.MPXAnalyzer.dll`). It has the same spectrum display, measurements and MPX recording. The rest of this page describes the SDR++ plugin.
