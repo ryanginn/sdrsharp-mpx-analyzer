@@ -1,4 +1,6 @@
-# MPX Analyzer for SDR++
+# MPX Analyzer for SDR++ and SDR#
+
+> **SDR# users:** see [`sdrsharp/README.md`](sdrsharp/README.md) for the SDR# plugin (`SDRSharp.MPXAnalyzer.dll`). It has the same spectrum display, measurements and MPX recording. The rest of this page describes the SDR++ plugin.
 
 An [SDR++](https://github.com/AlexandreRouma/SDRPlusPlus) plugin for broadcast FM that:
 

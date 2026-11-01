@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    SDR# plugin. Build against the SDR# you run:
+      dotnet build -c Release -p:SdrSharpDir="C:\path\to\sdrsharp"
+    SdrSharpDir is the folder holding SDRSharp.Common.dll and SDRSharp.Radio.dll (default: ./sdrsharp-bin).
+    TargetFramework must match SDR#'s .NET version (see SDRSharp.runtimeconfig.json), e.g.
+      -p:TargetFramework=net9.0-windows
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>SDRSharp.MPXAnalyzer</AssemblyName>
+    <RootNamespace>SDRSharp.MPXAnalyzer</RootNamespace>
+    <Version>0.1.0</Version>
+    <Product>MPX Analyzer for SDR#</Product>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+    <SdrSharpDir Condition="'$(SdrSharpDir)' == ''">$(MSBuildThisFileDirectory)sdrsharp-bin</SdrSharpDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="tests/**;smoketest/**" />
+    <None Remove="tests/**;smoketest/**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="SDRSharp.Common">
+      <HintPath>$(SdrSharpDir)/SDRSharp.Common.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="SDRSharp.Radio">
+      <HintPath>$(SdrSharpDir)/SDRSharp.Radio.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>

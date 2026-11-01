@@ -139,10 +139,96 @@ jobs:
               name: mpx_analyzer_macos_${{ matrix.arch }}
               path: dist/
 
+    # ---- SDR# plugin (sdrsharp/) ----
+
+    # DSP checks with synthetic FM signals, no SDR# needed
+    test_sdrsharp_dsp:
+        runs-on: ubuntu-latest
+
+        steps:
+        - name: Checkout plugin
+          uses: actions/checkout@v4
+
+        - name: Set up .NET
+          uses: actions/setup-dotnet@v4
+          with:
+              dotnet-version: "8.0.x"
+
+        - name: Run DSP tests
+          run: dotnet run -c Release --project sdrsharp/tests/MpxTests.csproj
+
+    # Builds against the current SDR# release, then loads the plugin with SDR#'s own assemblies (smoke test)
+    build_sdrsharp:
+        runs-on: windows-latest
+
+        steps:
+        - name: Checkout plugin
+          uses: actions/checkout@v4
+
+        - name: Download SDR#
+          run: |
+            Invoke-WebRequest -Uri "https://airspy.com/downloads/sdrsharp-x64.zip" -OutFile sdrsharp.zip -UserAgent "Mozilla/5.0"
+            Expand-Archive sdrsharp.zip -DestinationPath sdrsharp_dist
+
+        # The plugin must target the same .NET version as SDR#
+        - name: Find SDR# version
+          id: sdrsharp
+          run: |
+            $common = Get-ChildItem sdrsharp_dist -Recurse -Filter SDRSharp.Common.dll | Select-Object -First 1
+            if (-not $common) { throw "SDRSharp.Common.dll not found in the SDR# download" }
+            $dir = $common.DirectoryName
+            $rc = Get-ChildItem $dir -Filter "SDRSharp*.runtimeconfig.json" | Select-Object -First 1
+            if (-not $rc) { throw "No runtimeconfig.json next to SDR#: is it a .NET (not .NET Framework) build?" }
+            $tfm = (Get-Content $rc.FullName | ConvertFrom-Json).runtimeOptions.tfm -replace '-windows.*', ''
+            $exe = Get-ChildItem $dir -Filter "SDRSharp*.exe" | Select-Object -First 1
+            $ver = if ($exe) { $exe.VersionInfo.FileVersion } else { "unknown" }
+            "SDR# $ver ($tfm) in $dir"
+            "dir=$dir" >> $Env:GITHUB_OUTPUT
+            "tfm=$tfm-windows" >> $Env:GITHUB_OUTPUT
+            "dotnet=$($tfm.Substring(3)).x" >> $Env:GITHUB_OUTPUT
+            "version=$ver" >> $Env:GITHUB_OUTPUT
+
+        - name: Set up .NET
+          uses: actions/setup-dotnet@v4
+          with:
+              dotnet-version: ${{ steps.sdrsharp.outputs.dotnet }}
+
+        - name: Build
+          run: dotnet build sdrsharp/SDRSharp.MPXAnalyzer.csproj -c Release "-p:SdrSharpDir=${{ steps.sdrsharp.outputs.dir }}" "-p:TargetFramework=${{ steps.sdrsharp.outputs.tfm }}" -o sdrsharp_build
+
+        - name: Smoke test
+          run: |
+            dotnet build sdrsharp/smoketest/SmokeTest.csproj -c Release "-p:SdrSharpDir=${{ steps.sdrsharp.outputs.dir }}" "-p:TargetFramework=${{ steps.sdrsharp.outputs.tfm }}" -o smoketest_build
+            $p = Start-Process smoketest_build/SmokeTest.exe -ArgumentList "`"${{ steps.sdrsharp.outputs.dir }}`"", "`"$PWD/smoketest_out`"" -Wait -PassThru -NoNewWindow -RedirectStandardOutput smoketest.log
+            Get-Content smoketest.log
+            if ($p.ExitCode -ne 0) { throw "Smoke test failed" }
+
+        - name: Package
+          run: |
+            mkdir dist
+            cp sdrsharp_build/SDRSharp.MPXAnalyzer.dll dist/
+            cp sdrsharp/README.md, LICENSE dist/
+            "Built against SDR# ${{ steps.sdrsharp.outputs.version }} (${{ steps.sdrsharp.outputs.tfm }})" | Out-File -Encoding utf8 dist/SDRSHARP_VERSION.txt
+            Get-Content dist/SDRSHARP_VERSION.txt
+
+        - name: Upload
+          uses: actions/upload-artifact@v4
+          with:
+              name: mpx_analyzer_sdrsharp
+              path: dist/
+
+        - name: Upload smoke test screenshots
+          if: always()
+          uses: actions/upload-artifact@v4
+          with:
+              name: sdrsharp_smoketest_screenshots
+              path: smoketest_out/
+              if-no-files-found: ignore
+
     # Pushing a version tag (e.g. v0.2.0) publishes the builds as a GitHub Release
     release:
         if: startsWith(github.ref, 'refs/tags/v')
-        needs: [build_windows, build_linux, build_macos]
+        needs: [build_windows, build_linux, build_macos, build_sdrsharp, test_sdrsharp_dsp]
         runs-on: ubuntu-latest
         permissions:
             contents: write
@@ -156,6 +242,7 @@ jobs:
         - name: Zip builds
           run: |
             mkdir release
+            rm -rf artifacts/sdrsharp_smoketest_screenshots
             for DIR in artifacts/mpx_analyzer_*; do
                 NAME=$(basename "$DIR")
                 (cd "$DIR" && zip -r "$GITHUB_WORKSPACE/release/${NAME}_${GITHUB_REF_NAME}.zip" .)
@@ -173,6 +260,7 @@ jobs:
             | \`mpx_analyzer_windows_x64_${GITHUB_REF_NAME}.zip\` | Windows 64-bit | Copy \`mpx_analyzer.dll\` into SDR++'s \`modules\` folder |
             | \`mpx_analyzer_macos_arm_${GITHUB_REF_NAME}.zip\` | Mac, Apple Silicon | \`xattr -d com.apple.quarantine mpx_analyzer.dylib\`, then copy it to \`/Applications/SDR++.app/Contents/Plugins/\` |
             | \`mpx_analyzer_macos_intel_${GITHUB_REF_NAME}.zip\` | Mac, Intel | As above |
+            | \`mpx_analyzer_sdrsharp_${GITHUB_REF_NAME}.zip\` | SDR# (Windows) | Copy \`SDRSharp.MPXAnalyzer.dll\` into SDR#'s \`Plugins\` folder. $(cat artifacts/mpx_analyzer_sdrsharp/SDRSHARP_VERSION.txt | tr -d '\r\n' | sed 's/^\xEF\xBB\xBF//') |
 
             Linux: build from source, see the README. Then start SDR++ and add an \`mpx_analyzer\` instance in Module Manager.
             EOF
