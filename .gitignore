@@ -9,3 +9,8 @@ out/
 .idea/
 *.swp
 CMakeUserPresets.json
+
+# .NET (SDR# plugin)
+bin/
+obj/
+sdrsharp/sdrsharp-bin/
