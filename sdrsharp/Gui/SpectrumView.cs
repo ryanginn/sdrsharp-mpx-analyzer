@@ -10,14 +10,8 @@ namespace SDRSharp.MPXAnalyzer.Gui
     // and a cursor readout
     public sealed class SpectrumView : Control
     {
-        static readonly (double freq, string label)[] MARKERS =
-        {
-            (19000.0, "Pilot"),
-            (38000.0, "38k"),
-            (57000.0, "RDS"),
-            (67000.0, "SCA"),
-            (92000.0, "SCA")
-        };
+        static readonly double[] MARKER_FREQS = { 19000.0, 38000.0, 57000.0, 67000.0, 92000.0 };
+        static readonly string[] MARKER_LABELS = { "Pilot", "38k", "RDS", "SCA", "SCA" };
 
         readonly float[] avg = new float[MpxChain.FFT_BINS];
         readonly float[] peak = new float[MpxChain.FFT_BINS];
@@ -75,7 +69,7 @@ namespace SDRSharp.MPXAnalyzer.Gui
             double span = MaxFreqKHz * 1000.0;
             float dbRange = Math.Max(DbMax - DbMin, 1.0f);
             float FToX(double f) => plot.Left + (float)(f / span) * plot.Width;
-            float DbToY(float db) => Math.Clamp(plot.Bottom - (db - DbMin) / dbRange * plot.Height, plot.Top, plot.Bottom);
+            float DbToY(float db) => MathUtil.Clamp(plot.Bottom - (db - DbMin) / dbRange * plot.Height, plot.Top, plot.Bottom);
 
             using var textBrush = new SolidBrush(Theme.Text);
             using var axisBrush = new SolidBrush(Theme.AxisText);
@@ -115,8 +109,10 @@ namespace SDRSharp.MPXAnalyzer.Gui
             using (var markerPen = new Pen(Theme.Marker) { DashStyle = DashStyle.Dash })
             using (var markerBrush = new SolidBrush(Theme.Marker))
             {
-                foreach (var (freq, label) in MARKERS)
+                for (int k = 0; k < MARKER_FREQS.Length; k++)
                 {
+                    double freq = MARKER_FREQS[k];
+                    string label = MARKER_LABELS[k];
                     if (freq > span) { continue; }
                     float x = FToX(freq);
                     g.DrawLine(markerPen, x, plot.Top, x, plot.Bottom);
@@ -161,7 +157,7 @@ namespace SDRSharp.MPXAnalyzer.Gui
                 var m = mouse.Value;
                 double binHz = MpxChain.SAMPLERATE / MpxChain.FFT_SIZE;
                 double f = (m.X - plot.Left) / plot.Width * span;
-                int bin = Math.Clamp((int)Math.Round(f / binHz), 0, MpxChain.FFT_BINS - 1);
+                int bin = MathUtil.Clamp((int)Math.Round(f / binHz), 0, MpxChain.FFT_BINS - 1);
                 using (var cursorPen = new Pen(Color.FromArgb(128, Theme.Text))) { g.DrawLine(cursorPen, m.X, plot.Top, m.X, plot.Bottom); }
 
                 string text = string.Format("{0:0.00} kHz\nAvg:  {1:0.0} dB", bin * binHz / 1000.0, ToDB(avg[bin]));
@@ -188,8 +184,8 @@ namespace SDRSharp.MPXAnalyzer.Gui
             if (trace.Length != width + 1) { trace = new PointF[width + 1]; }
             for (int px = 0; px <= width; px++)
             {
-                int b0 = Math.Clamp((int)(span * px / width / binHz), 0, MpxChain.FFT_BINS - 1);
-                int b1 = Math.Clamp((int)(span * (px + 1) / width / binHz), b0, MpxChain.FFT_BINS - 1);
+                int b0 = MathUtil.Clamp((int)(span * px / width / binHz), 0, MpxChain.FFT_BINS - 1);
+                int b1 = MathUtil.Clamp((int)(span * (px + 1) / width / binHz), b0, MpxChain.FFT_BINS - 1);
                 float p = spec[b0];
                 for (int b = b0 + 1; b < b1; b++) { p = Math.Max(p, spec[b]); }
                 trace[px] = new PointF(plot.Left + px, dbToY(ToDB(p)));

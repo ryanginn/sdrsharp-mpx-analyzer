@@ -87,10 +87,10 @@ namespace SDRSharp.MPXAnalyzer.Gui
             ForeColor = Theme.Text;
             toolbar.BackColor = Theme.Toolbar;
             right.BackColor = Theme.Background;
-            freqLabel.ForeColor = Theme.Text;
-            peakHoldCheck.ForeColor = Theme.Text;
-            infoLabel.ForeColor = Theme.Dim;
-            scaleNote.ForeColor = Theme.Dim;
+            freqLabel.ForeColor = Theme.ToolbarText;
+            peakHoldCheck.ForeColor = Theme.ToolbarText;
+            infoLabel.ForeColor = Theme.ToolbarDim;
+            scaleNote.ForeColor = Theme.ToolbarDim;
             recTimeLabel.ForeColor = Theme.Over;
             spectrum.Invalidate();
             meters.Invalidate();

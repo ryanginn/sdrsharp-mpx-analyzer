@@ -57,19 +57,33 @@ The demodulated signal is resampled from SDR#'s IQ rate (typically 250–500 kS/
 
 ## Requirements
 
-- A current **SDR#**. SDR# comes as `SDRSharp.dotnet8.exe` and `SDRSharp.dotnet9.exe`; the pre-built plugin targets .NET 8, so it works with either. It's built against the SDR# release that was current at build time.
+- **SDR#**, current or older. There are two builds of the plugin:
+  - **Current SDR#** (`SDRSharp.dotnet8.exe` / `SDRSharp.dotnet9.exe`): the .NET 8 build, which works with either.
+  - **Older 32-bit SDR#** on .NET Framework (e.g. 1716): the legacy build. Older SDR# has no themes, so the window uses standard Windows colours with a black spectrum, and SDR#'s spectrum gradient and colours from `SDRSharp.exe.config`.
 - A source sample rate high enough for a **200–250 kHz** WFM filter (any Airspy, RTL-SDR at ≥ 1 MS/s, etc.).
 
 ## Installing
 
-**Pre-built (GitHub Actions):** every push builds `SDRSharp.MPXAnalyzer.dll` against the SDR# release current at that time. Download it from the run's *Artifacts* (`mpx_analyzer_sdrsharp`), or from a GitHub Release. `SDRSHARP_VERSION.txt` shows which SDR# version and .NET version it was built for.
+**Pre-built (GitHub Actions):** every push builds both versions. Download them from the run's *Artifacts*, or from a GitHub Release:
+- `mpx_analyzer_sdrsharp`: for current SDR#. `SDRSHARP_VERSION.txt` shows which SDR# release it was built against.
+- `mpx_analyzer_sdrsharp_legacy`: for older 32-bit SDR# on .NET Framework (e.g. 1716).
 
+Both contain a file called `SDRSharp.MPXAnalyzer.dll`; use the one that matches your SDR#. Windows may block downloaded DLLs: if the plugin doesn't appear, right-click the DLL → *Properties* → tick *Unblock*.
+
+**Current SDR#:**
 1. Close SDR#.
-2. Copy `SDRSharp.MPXAnalyzer.dll` into SDR#'s `Plugins` folder. Windows may block downloaded DLLs: if the plugin doesn't appear, right-click the DLL → *Properties* → tick *Unblock*.
-3. Start SDR#. **MPX Analyzer** appears in the plugin list (left-hand menu, *Analysis* category). Older SDR# versions that use `Plugins.xml` instead need this line inside its `<sharpPlugins>` section:
+2. Copy `SDRSharp.MPXAnalyzer.dll` into SDR#'s `Plugins` folder.
+3. Start SDR#. **MPX Analyzer** appears in the plugin list (left-hand menu, *Analysis* category).
+
+**Older SDR# (e.g. 1716):**
+1. Close SDR#.
+2. Copy `SDRSharp.MPXAnalyzer.dll` into SDR#'s own folder (next to `SDRSharp.exe`).
+3. Add this line inside the `<sharpPlugins>` section of `Plugins.xml`:
    ```xml
    <add key="MPX Analyzer" value="SDRSharp.MPXAnalyzer.MpxPlugin,SDRSharp.MPXAnalyzer" />
    ```
+   Even older versions without `Plugins.xml` have the same `<sharpPlugins>` section in `SDRSharp.exe.config`.
+4. Start SDR#. **MPX Analyzer** appears among the plugin panels.
 
 If SDR# is updated to a new .NET version, rebuild the plugin (or download a newer build).
 
@@ -107,12 +121,22 @@ Settings are saved in `MPXAnalyzer.json` in SDR#'s folder (or in `%LOCALAPPDATA%
 
 ## Building
 
-Requires the .NET 8 SDK (or newer) on Windows, and SDR#'s `SDRSharp.Common.dll` and `SDRSharp.Radio.dll`. Current SDR# releases are single-file bundles, so extract them from `SDRSharp.dotnet8.exe` first, e.g. with [sfextract](https://github.com/Droppers/SingleFileExtractor) (`dotnet tool install -g sfextract`, then `sfextract SDRSharp.dotnet8.exe -o sdrsharp-bin`).
+Requires the .NET 8 SDK (or newer) on Windows, and SDR#'s `SDRSharp.Common.dll` and `SDRSharp.Radio.dll`.
+
+**Current SDR#:** its releases are single-file bundles, so extract the DLLs from `SDRSharp.dotnet8.exe` first, e.g. with [sfextract](https://github.com/Droppers/SingleFileExtractor) (`dotnet tool install -g sfextract`, then `sfextract SDRSharp.dotnet8.exe -o sdrsharp-bin`).
 
 ```bat
 cd sdrsharp
-dotnet build -c Release -p:SdrSharpDir="C:\path\to\sdrsharp-bin"
+dotnet build -c Release -f net8.0-windows -p:SdrSharpDir="C:\path\to\sdrsharp-bin"
 ```
+
+**Older SDR# (.NET Framework):** point `SdrSharpDir` at the SDR# folder itself. The .NET Framework reference assemblies come from NuGet, so no targeting pack is needed.
+
+```bat
+dotnet build -c Release -f net46 -p:SdrSharpDir="C:\path\to\sdrsharp-1716"
+```
+
+SDR# can't be redistributed, so CI builds the older version against `legacy-ref/`. These are compile-only stand-ins that declare the SDR# 1716 API the plugin uses, and they're never shipped. A build against them references SDR# identically to one built against the real SDR# 1716: the same assembly references and byte-identical member signatures.
 
 `SdrSharpDir` is the folder with `SDRSharp.Common.dll` and `SDRSharp.Radio.dll` (default `sdrsharp\sdrsharp-bin`). Copy `bin\Release\<framework>\SDRSharp.MPXAnalyzer.dll` into SDR#'s `Plugins` folder.
 
@@ -124,7 +148,7 @@ The DSP code has no SDR# dependency and is tested with synthetic FM signals of e
 dotnet run -c Release --project sdrsharp/tests/MpxTests.csproj
 ```
 
-It checks the pilot, RDS (with and without noise), MPX power, deviation (including the peak response times), flatness at 57 kHz, RDS lock detection and the WAV writer. CI also runs `smoketest/`, which loads the plugin with SDR#'s own assemblies on Windows, feeds it a signal through the IQ hook, checks the readings and saves screenshots in a dark and a light theme (artifact `sdrsharp_smoketest_screenshots`). `SmokeTest.exe <SDR# assemblies folder> <out> --api-dump` lists SDR#'s theme and colour API.
+It checks the pilot, RDS (with and without noise), MPX power, deviation (including the peak response times), flatness at 57 kHz, RDS lock detection and the WAV writer. CI also runs `smoketest/` for both versions (the older one as a 32-bit .NET Framework process). It loads the plugin with SDR#'s assemblies on Windows, feeds it a signal through the IQ hook, checks the readings and saves screenshots in a dark and a light theme (artifact `sdrsharp_smoketest_screenshots`). `SmokeTest.exe <SDR# assemblies folder> <out> --api-dump` lists SDR#'s theme and colour API.
 
 ## License
 

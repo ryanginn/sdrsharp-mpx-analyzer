@@ -41,8 +41,8 @@ namespace SDRSharp.MPXAnalyzer.Dsp
                 int j = bitRev[i];
                 if (j > i)
                 {
-                    (re[i], re[j]) = (re[j], re[i]);
-                    (im[i], im[j]) = (im[j], im[i]);
+                    double t = re[i]; re[i] = re[j]; re[j] = t;
+                    t = im[i]; im[i] = im[j]; im[j] = t;
                 }
             }
             for (int len = 2; len <= size; len <<= 1)

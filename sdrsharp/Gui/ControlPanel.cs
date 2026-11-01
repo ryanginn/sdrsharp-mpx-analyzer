@@ -121,7 +121,7 @@ namespace SDRSharp.MPXAnalyzer.Gui
                                                   "with 125 \u00B5s or 1 ms, peaks shorter than that read lower");
 
             limitUpDown = new NumericUpDown { Minimum = -6, Maximum = 12, DecimalPlaces = 1, Increment = 0.5m, Dock = DockStyle.Fill };
-            limitUpDown.Value = Math.Clamp((decimal)s.MpxPowerLimitDBr, limitUpDown.Minimum, limitUpDown.Maximum);
+            limitUpDown.Value = MathUtil.Clamp((decimal)s.MpxPowerLimitDBr, limitUpDown.Minimum, limitUpDown.Maximum);
             limitUpDown.ValueChanged += (o, e) =>
             {
                 s.MpxPowerLimitDBr = (float)limitUpDown.Value;
@@ -185,7 +185,7 @@ namespace SDRSharp.MPXAnalyzer.Gui
 
         NumericUpDown AddNumber(string label, int min, int max, int value, string tip)
         {
-            var n = new NumericUpDown { Minimum = min, Maximum = max, Value = Math.Clamp(value, min, max), Dock = DockStyle.Fill };
+            var n = new NumericUpDown { Minimum = min, Maximum = max, Value = MathUtil.Clamp(value, min, max), Dock = DockStyle.Fill };
             AddRow(label, n, tip);
             return n;
         }
@@ -217,8 +217,8 @@ namespace SDRSharp.MPXAnalyzer.Gui
         {
             var s = plugin.Settings;
             updating = true;
-            dbMaxUpDown.Value = Math.Clamp((decimal)s.DbMax, dbMaxUpDown.Minimum, dbMaxUpDown.Maximum);
-            dbMinUpDown.Value = Math.Clamp((decimal)s.DbMin, dbMinUpDown.Minimum, dbMinUpDown.Maximum);
+            dbMaxUpDown.Value = MathUtil.Clamp((decimal)s.DbMax, dbMaxUpDown.Minimum, dbMaxUpDown.Maximum);
+            dbMinUpDown.Value = MathUtil.Clamp((decimal)s.DbMin, dbMinUpDown.Minimum, dbMinUpDown.Maximum);
             peakHoldCheck.Checked = s.PeakHold;
             updating = false;
         }

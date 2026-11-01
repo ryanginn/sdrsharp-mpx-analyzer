@@ -1,39 +1,52 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    SDR# plugin:
-      dotnet build -c Release -p:SdrSharpDir="C:\path\to\sdrsharp-bin"
-    SdrSharpDir is the folder holding SDRSharp.Common.dll and SDRSharp.Radio.dll (default: ./sdrsharp-bin), extracted
-    from SDRSharp.dotnet8.exe (see README.md). Built for .NET 8, the plugin loads in both SDR#'s .NET 8 and .NET 9 builds.
+    SDR# plugin, built for two SDR# generations:
+      net8.0-windows  current SDR# (SDRSharp.dotnet8.exe / SDRSharp.dotnet9.exe)
+      net46           older SDR# on .NET Framework (32-bit, e.g. 1716)
+    Build one at a time against the matching SDR# assemblies:
+      dotnet build -c Release -f net8.0-windows -p:SdrSharpDir="C:\path\to\sdrsharp-bin"
+      dotnet build -c Release -f net46 -p:SdrSharpDir="C:\path\to\sdrsharp-1716"
+    (CI builds net46 against the compile-only stand-ins in legacy-ref/, since SDR# can't be redistributed)
+    SdrSharpDir is the folder holding SDRSharp.Common.dll and SDRSharp.Radio.dll (default: ./sdrsharp-bin). Current
+    SDR# is a single-file bundle: extract them from SDRSharp.dotnet8.exe first (see README.md).
   -->
   <PropertyGroup>
-    <TargetFramework>net8.0-windows</TargetFramework>
-    <UseWindowsForms>true</UseWindowsForms>
-    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <TargetFrameworks>net8.0-windows;net46</TargetFrameworks>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Nullable>disable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
     <AssemblyName>SDRSharp.MPXAnalyzer</AssemblyName>
     <RootNamespace>SDRSharp.MPXAnalyzer</RootNamespace>
     <Version>0.1.0</Version>
     <Product>MPX Analyzer for SDR#</Product>
     <PlatformTarget>AnyCPU</PlatformTarget>
     <GenerateDependencyFile>false</GenerateDependencyFile>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <SdrSharpDir Condition="'$(SdrSharpDir)' == ''">$(MSBuildThisFileDirectory)sdrsharp-bin</SdrSharpDir>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net8.0-windows'">
+    <UseWindowsForms>true</UseWindowsForms>
+  </PropertyGroup>
+
+  <!-- .NET Framework: reference assemblies from NuGet, so it builds without the targeting pack installed -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net46'">
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Numerics" />
+  </ItemGroup>
+
   <ItemGroup>
-    <Compile Remove="tests/**;smoketest/**" />
-    <None Remove="tests/**;smoketest/**" />
+    <Compile Remove="tests/**;smoketest/**;legacy-ref/**" />
+    <None Remove="tests/**;smoketest/**;legacy-ref/**" />
   </ItemGroup>
 
   <ItemGroup>
     <Reference Include="SDRSharp.Common">
       <HintPath>$(SdrSharpDir)/SDRSharp.Common.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="SDRSharp.PanView">
-      <HintPath>$(SdrSharpDir)/SDRSharp.PanView.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="SDRSharp.Radio">

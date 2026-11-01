@@ -681,7 +681,7 @@ namespace SDRSharp.MPXAnalyzer.Dsp
             // then RMS -> peak. A DSB signal a(t)cos(wt) becomes a(t)/2 at 0Hz
             double rdsTotal = rdsTotSum / peakFill;
             double rdsDcPower = rdsDcSum / peakFill;
-            double rdsSignal = Math.Clamp((rdsNoiseDcFraction * rdsTotal - rdsDcPower) / (rdsNoiseDcFraction - rdsSignalDcFraction), 0.0, rdsTotal);
+            double rdsSignal = MathUtil.Clamp((rdsNoiseDcFraction * rdsTotal - rdsDcPower) / (rdsNoiseDcFraction - rdsSignalDcFraction), 0.0, rdsTotal);
             double rdsNoise = rdsTotal - rdsSignal;
             meas.RdsKHz = (float)(2.0 * Math.Sqrt(rdsSignal) * RDS_CREST_FACTOR * khz);
             meas.RdsPresent = meas.RdsKHz >= RDS_MIN_KHZ && rdsSignal >= RDS_MIN_SNR * rdsNoise;

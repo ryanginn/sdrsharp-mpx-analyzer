@@ -1,5 +1,4 @@
 using System;
-using System.Numerics;
 
 namespace SDRSharp.MPXAnalyzer.Dsp
 {
@@ -110,7 +109,9 @@ namespace SDRSharp.MPXAnalyzer.Dsp
             histLen += count;
 
             int outCount = 0;
-            int vlen = Vector<float>.Count;
+#if NETCOREAPP
+            int vlen = System.Numerics.Vector<float>.Count;
+#endif
             while (true)
             {
                 int i0 = (int)pos;
@@ -122,17 +123,21 @@ namespace SDRSharp.MPXAnalyzer.Dsp
 
                 // Two dot products, blended
                 float[] b0 = bank[p], b1 = bank[p + 1];
-                var acc0 = Vector<float>.Zero;
-                var acc1 = Vector<float>.Zero;
+                float s0 = 0.0f, s1 = 0.0f;
                 int j = 0;
+#if NETCOREAPP
+                // SIMD (.NET 8 builds)
+                var acc0 = System.Numerics.Vector<float>.Zero;
+                var acc1 = System.Numerics.Vector<float>.Zero;
                 for (; j <= taps - vlen; j += vlen)
                 {
-                    var x = new Vector<float>(hist, first + j);
-                    acc0 += x * new Vector<float>(b0, j);
-                    acc1 += x * new Vector<float>(b1, j);
+                    var x = new System.Numerics.Vector<float>(hist, first + j);
+                    acc0 += x * new System.Numerics.Vector<float>(b0, j);
+                    acc1 += x * new System.Numerics.Vector<float>(b1, j);
                 }
-                float s0 = Vector.Dot(acc0, Vector<float>.One);
-                float s1 = Vector.Dot(acc1, Vector<float>.One);
+                s0 = System.Numerics.Vector.Dot(acc0, System.Numerics.Vector<float>.One);
+                s1 = System.Numerics.Vector.Dot(acc1, System.Numerics.Vector<float>.One);
+#endif
                 for (; j < taps; j++)
                 {
                     float x = hist[first + j];
