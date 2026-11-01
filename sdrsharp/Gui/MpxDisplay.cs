@@ -5,13 +5,14 @@ using SDRSharp.MPXAnalyzer.Dsp;
 
 namespace SDRSharp.MPXAnalyzer.Gui
 {
-    // The MPX spectrum with its toolbar and level readouts. Hosted by an SDR# dock panel (current SDR#) or by the
-    // floating MpxWindow (older SDR#)
+    // The MPX spectrum with its level readouts and controls. Docked in SDR#'s main window next to its own spectra
+    // (current SDR#) or hosted by the floating MpxWindow (older SDR#).
+    //
+    // Layout: spectrum on the left using the full height; on the right the record button, the meters, and peak
+    // hold / reset at the bottom. Frequency and filter aren't repeated here, SDR# shows them already
     public sealed class MpxDisplay : UserControl
     {
         readonly MpxCore core;
-        readonly Label freqLabel;
-        readonly Label infoLabel;
         readonly CheckBox peakHoldCheck;
         readonly Button resetPeakButton;
         readonly Label recTimeLabel;
@@ -20,58 +21,62 @@ namespace SDRSharp.MPXAnalyzer.Gui
         readonly MetersView meters;
         readonly Button resetMeasButton;
         readonly ToolTip toolTip = new ToolTip();
-        readonly TableLayoutPanel toolbar;
-        readonly Label scaleNote;
         readonly Panel right;
+        readonly TableLayoutPanel recRow;
+        readonly TableLayoutPanel peakRow;
         bool updating;
 
         internal MpxDisplay(MpxCore core)
         {
             this.core = core;
-            Size = new Size(720, 300);
-            MinimumSize = new Size(360, 160);
+            Text = "MPX Spectrum";
+            Name = "MPX Spectrum";
+            Size = new Size(720, 260);
+            MinimumSize = new Size(360, 150);
 
-            // Toolbar: frequency, info, peak hold, record button
-            toolbar = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 7, Padding = new Padding(4, 3, 4, 3) };
-            for (int i = 0; i < 7; i++) { toolbar.ColumnStyles.Add(new ColumnStyle(i == 4 ? SizeType.Percent : SizeType.AutoSize, 100.0f)); }
+            spectrum = new SpectrumView { Dock = DockStyle.Fill };
+            meters = new MetersView { Dock = DockStyle.Fill };
+            int rightWidth = Math.Max(meters.PreferredWidth, (int)(Font.Height * 11.5f));
 
-            freqLabel = new Label { AutoSize = true, Anchor = AnchorStyles.Left, Font = new Font(Font.FontFamily, Font.Size * 1.15f, FontStyle.Bold) };
-            infoLabel = new Label { AutoSize = true, Anchor = AnchorStyles.Left };
+            // Top of the meters column: record button and elapsed time
+            recRow = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 2, Margin = new Padding(0) };
+            recRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100.0f));
+            recRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            recTimeLabel = new Label { AutoSize = true, Anchor = AnchorStyles.Left };
+            recordButton = new Button { Size = new Size(24, 24), Anchor = AnchorStyles.Right, Margin = new Padding(2) };
+            recordButton.Paint += PaintRecordButton;
+            recordButton.Click += (o, e) => core.ToggleRecording(FindForm());
+            recRow.Controls.Add(recTimeLabel, 0, 0);
+            recRow.Controls.Add(recordButton, 1, 0);
+
+            // Bottom: peak hold, then the measurements reset
+            peakRow = new TableLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true, ColumnCount = 2, Margin = new Padding(0) };
+            peakRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100.0f));
+            peakRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             peakHoldCheck = new CheckBox { Text = "Peak hold", AutoSize = true, Anchor = AnchorStyles.Left };
             peakHoldCheck.CheckedChanged += (o, e) =>
             {
                 if (updating) { return; }
                 core.SetPeakHold(peakHoldCheck.Checked);
             };
-            resetPeakButton = new Button { Text = "Reset", AutoSize = true, Anchor = AnchorStyles.Left };
+            resetPeakButton = new Button { Text = "Clear", AutoSize = true, Anchor = AnchorStyles.Right, Margin = new Padding(2) };
             resetPeakButton.Click += (o, e) => core.Chain.ResetPeak();
-            scaleNote = new Label { Text = "0 dB = 75 kHz dev.", AutoSize = true, Anchor = AnchorStyles.Right };
-            recTimeLabel = new Label { AutoSize = true, Anchor = AnchorStyles.Right };
-            recordButton = new Button { Size = new Size(26, 26), Anchor = AnchorStyles.Right, Margin = new Padding(6, 0, 0, 0) };
-            recordButton.Paint += PaintRecordButton;
-            recordButton.Click += (o, e) => core.ToggleRecording(FindForm());
+            toolTip.SetToolTip(resetPeakButton, "Clear the peak hold trace");
+            peakRow.Controls.Add(peakHoldCheck, 0, 0);
+            peakRow.Controls.Add(resetPeakButton, 1, 0);
 
-            toolbar.Controls.Add(freqLabel, 0, 0);
-            toolbar.Controls.Add(infoLabel, 1, 0);
-            toolbar.Controls.Add(peakHoldCheck, 2, 0);
-            toolbar.Controls.Add(resetPeakButton, 3, 0);
-            toolbar.Controls.Add(scaleNote, 4, 0);
-            toolbar.Controls.Add(recTimeLabel, 5, 0);
-            toolbar.Controls.Add(recordButton, 6, 0);
-
-            // Spectrum on the left, meters on the right
-            spectrum = new SpectrumView { Dock = DockStyle.Fill };
-            meters = new MetersView { Dock = DockStyle.Fill };
             resetMeasButton = new Button { Text = "Reset", AutoSize = true, Dock = DockStyle.Bottom };
             resetMeasButton.Click += (o, e) => core.Chain.ResetMeasurements();
             toolTip.SetToolTip(resetMeasButton, "Restart the measurements (also done automatically when retuning)");
-            right = new Panel { Dock = DockStyle.Right, Width = meters.PreferredWidth, Padding = new Padding(0, 4, 4, 4) };
+
+            right = new Panel { Dock = DockStyle.Right, Width = rightWidth, Padding = new Padding(0, 2, 4, 4) };
             right.Controls.Add(meters);
+            right.Controls.Add(recRow);
+            right.Controls.Add(peakRow);
             right.Controls.Add(resetMeasButton);
 
             Controls.Add(spectrum);
             Controls.Add(right);
-            Controls.Add(toolbar);
             ApplyTheme();
         }
 
@@ -80,12 +85,9 @@ namespace SDRSharp.MPXAnalyzer.Gui
         {
             BackColor = Theme.Background;
             ForeColor = Theme.Text;
-            toolbar.BackColor = Theme.Toolbar;
             right.BackColor = Theme.Background;
-            freqLabel.ForeColor = Theme.ToolbarText;
-            peakHoldCheck.ForeColor = Theme.ToolbarText;
-            infoLabel.ForeColor = Theme.ToolbarDim;
-            scaleNote.ForeColor = Theme.ToolbarDim;
+            recRow.BackColor = peakRow.BackColor = Theme.Background;
+            peakHoldCheck.ForeColor = Theme.Text;
             recTimeLabel.ForeColor = Theme.Over;
             spectrum.Invalidate();
             meters.Invalidate();
@@ -116,10 +118,7 @@ namespace SDRSharp.MPXAnalyzer.Gui
         {
             var s = core.Settings;
             var chain = core.Chain;
-
-            freqLabel.Text = string.Format("{0:0.0000} MHz", core.Frequency / 1e6);
             double rate = chain.IqRate;
-            infoLabel.Text = rate > 0.0 ? string.Format("IF {0:0} kHz", core.FilterBandwidth / 1000.0) : "";
 
             updating = true;
             peakHoldCheck.Checked = s.PeakHold;

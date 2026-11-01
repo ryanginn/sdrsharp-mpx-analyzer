@@ -48,8 +48,8 @@ namespace SDRSharp.MPXAnalyzer.Gui
             table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100.0f));
 
 #if NETCOREAPP
-            // Current SDR#: the spectrum is a dock panel of its own, like SDR#'s FM MPX Spectrum
-            var hint = new Label { Text = "Open the spectrum and meters from SDR#'s menu: MPX Spectrum (Analysis).", AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(3, 3, 3, 6) };
+            // Current SDR#: the spectrum is docked in SDR#'s main window, like its FM MPX Spectrum
+            var hint = new Label { Text = "The MPX Spectrum panel is docked in SDR#'s main window, below the spectrum (drag its tab to move it).", AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(3, 3, 3, 6) };
             hint.MaximumSize = new Size(260, 0);
             AddWide(hint);
 #else

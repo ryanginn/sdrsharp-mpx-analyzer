@@ -73,9 +73,9 @@ Both contain a file called `SDRSharp.MPXAnalyzer.dll`; use the one that matches 
 **Current SDR#:**
 1. Close SDR#.
 2. Copy `SDRSharp.MPXAnalyzer.dll` into SDR#'s `Plugins` folder.
-3. Start SDR#. Two panels appear in SDR#'s menu (*Analysis* category):
-   - **MPX Spectrum**: the spectrum and meters, as a dock panel like SDR#'s own FM MPX Spectrum. It docks at the bottom by default, and can be moved, tabbed next to other panels, pinned or floated like them.
-   - **MPX Analyzer**: the settings and recording.
+3. Start SDR#. You get two panels:
+   - **MPX Spectrum**: the spectrum and meters. It's docked in SDR#'s main window, below the spectrum and waterfall, with SDR#'s IF, Audio and FM MPX spectra. Like them, it can be moved, tabbed, floated or closed.
+   - **MPX Analyzer**: the settings and recording, in SDR#'s plugin list (*Analysis* category).
 
 **Older SDR# (e.g. 1716):**
 1. Close SDR#.
@@ -93,11 +93,17 @@ If SDR# is updated to a new .NET version, rebuild the plugin (or download a newe
 
 1. Tune SDR# to an FM broadcast station in **WFM** mode, and set the filter bandwidth to about 200–250 kHz.
 2. Open the spectrum:
-   - **Current SDR#:** open **MPX Spectrum** from SDR#'s menu. SDR# remembers where it's docked.
+   - **Current SDR#:** the **MPX Spectrum** panel is docked below SDR#'s spectrum. Drag its tab to move it.
    - **Older SDR#** (no dock panels): open the **MPX Analyzer** panel and press **Show MPX window**. The window remembers its position, and reopens with SDR# if it was open when SDR# closed.
 3. The spectrum follows SDR#'s theme (dark or light, changed while running too) and its spectrum display settings: spectrum style (gradient, solid fill or line), gradient, envelope, fill and peak colours, drawn the way SDR#'s own spectra draw them. The peak hold trace uses SDR#'s peak colour.
-4. Hover over the spectrum to read frequency and level. Enable **Peak hold** to catch transients.
-5. Choose a folder and sample type in the panel, then press **Record MPX**. You can also use the **red record button** at the top right of the MPX window; it turns into a square stop button, with the elapsed time beside it, while recording.
+4. The spectrum uses the panel's full height. The column on its right has:
+   - the record button at the top
+   - the readings
+   - **Peak hold** (with *Clear*) and **Reset** at the bottom
+
+   Frequency and filter aren't repeated there, since SDR# shows them.
+5. Hover over the spectrum to read frequency and level. Enable **Peak hold** to catch transients.
+6. Choose a folder and sample type in the MPX Analyzer panel, then press **Record MPX**, or use the **red record button** above the readings. It turns into a square stop button while recording, with the elapsed time beside it.
 
 ### Panel options
 
