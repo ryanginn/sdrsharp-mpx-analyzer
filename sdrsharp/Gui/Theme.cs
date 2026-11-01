@@ -1,21 +1,29 @@
 using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Globalization;
+using System.Reflection;
 using System.Windows.Forms;
 using SDRSharp.Common;
-using SDRSharp.PanView;
-using SDRSharp.Radio;
 
 namespace SDRSharp.MPXAnalyzer.Gui
 {
-    // Colours and spectrum style taken from SDR#'s current theme and display settings, so the MPX window looks
-    // like SDR#'s own spectrum displays whichever theme is selected. Refresh() picks up changes while running.
+    // Same order as SDR#'s SpectrumStyle
+    enum SpecStyle { Dots, SimpleCurve, SolidFill, StaticGradient, DynamicGradient, MinMax }
+
+    // Colours and spectrum style taken from SDR#, so the MPX window looks like SDR#'s own spectrum displays.
+    // Current SDR# has themes (ISharpControl.ThemeIsDark, ThemeForeColor...); older builds (.NET Framework, e.g.
+    // 1716) don't, and use standard window colours with a black spectrum. Everything is read by reflection so one
+    // code base works with both. Refresh() picks up changes while running.
     static class Theme
     {
         public static bool Dark = true;
+        public static bool HasThemes;                       // SDR# has the theme API
         public static Color Background = Color.Black;       // Spectrum and meters
-        public static Color Toolbar = Color.FromArgb(24, 24, 24);
         public static Color Text = Color.FromArgb(220, 220, 220);
+        public static Color Toolbar = Color.FromArgb(24, 24, 24);
+        public static Color ToolbarText = Color.FromArgb(220, 220, 220);
+        public static Color ToolbarDim = Color.FromArgb(140, 140, 140);
         public static Color AxisText = Color.FromArgb(200, 200, 200);
         public static Color Dim = Color.FromArgb(140, 140, 140);
         public static Color Grid = Color.FromArgb(64, 64, 64);
@@ -28,75 +36,139 @@ namespace SDRSharp.MPXAnalyzer.Gui
         public static Color Over = Color.FromArgb(255, 51, 51);
         public static Color Good = Color.FromArgb(77, 217, 77);
         public static readonly Color Record = Color.FromArgb(230, 40, 40);
-        public static SpectrumStyle Style = SpectrumStyle.StaticGradient;
-        static ColorBlend gradient = DefaultGradient();
+        public static SpecStyle Style = SpecStyle.StaticGradient;
+        static ColorBlend gradient = ParseGradient(DEFAULT_GRADIENT);
         static string key;
 
-        static ColorBlend DefaultGradient() => new ColorBlend
-        {
-            Colors = new[] { Color.White, Color.LightBlue, Color.DodgerBlue, Color.FromArgb(0, 0, 80), Color.Black },
-            Positions = new[] { 0.0f, 0.25f, 0.5f, 0.75f, 1.0f }
-        };
+        const string DEFAULT_GRADIENT = "FFFFFF,ADD8E6,1E90FF,000050,000000";
 
-        static Color Valid(Color c, Color fallback) => (c.IsEmpty || c.A == 0) ? fallback : c;
+        // ---- Reading SDR# ----
+
+        static object GetProp(ISharpControl control, string name)
+        {
+            try
+            {
+                var p = typeof(ISharpControl).GetProperty(name) ?? control.GetType().GetProperty(name);
+                return p?.GetValue(control, null);
+            }
+            catch { return null; }
+        }
+
+        static Type RadioUtils => Type.GetType("SDRSharp.Radio.Utils, SDRSharp.Radio", false);
+
+        // SDR# setting as text (SDRSharp.config / SDRSharp.exe.config), or null
+        static string GetSetting(string name)
+        {
+            try
+            {
+                var m = RadioUtils?.GetMethod("GetStringSetting", new[] { typeof(string), typeof(string) });
+                return m?.Invoke(null, new object[] { name, null }) as string;
+            }
+            catch { return null; }
+        }
+
+        static Color GetColorSetting(string name, Color fallback)
+        {
+            try
+            {
+                var m = RadioUtils?.GetMethod("GetColorSetting", new[] { typeof(string), typeof(Color) });
+                if (m != null) { return (Color)m.Invoke(null, new object[] { name, fallback }); }
+            }
+            catch { }
+            return ParseColor(GetSetting(name), fallback);
+        }
+
+        // "RRGGBB" or "AARRGGBB"
+        static Color ParseColor(string s, Color fallback)
+        {
+            if (string.IsNullOrWhiteSpace(s)) { return fallback; }
+            s = s.Trim().TrimStart('#');
+            if (!uint.TryParse(s, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out uint v)) { return fallback; }
+            return (s.Length <= 6) ? Color.FromArgb(255, (int)((v >> 16) & 0xFF), (int)((v >> 8) & 0xFF), (int)(v & 0xFF)) : Color.FromArgb((int)v);
+        }
+
+        // SDR#'s gradient setting format: colours from top to bottom, e.g. "FFFFFF,ADD8E6,1E90FF,000050,000000"
+        static ColorBlend ParseGradient(string s)
+        {
+            if (string.IsNullOrWhiteSpace(s)) { return null; }
+            var parts = s.Split(',');
+            if (parts.Length < 2) { return null; }
+            var blend = new ColorBlend(parts.Length);
+            for (int i = 0; i < parts.Length; i++)
+            {
+                blend.Colors[i] = ParseColor(parts[i], Color.Black);
+                blend.Positions[i] = (float)i / (parts.Length - 1);
+            }
+            return blend;
+        }
+
+        static Color Valid(object c, Color fallback) => (c is Color col && !col.IsEmpty && col.A != 0) ? col : fallback;
 
         static Color Mix(Color a, Color b, float t) =>
             Color.FromArgb((int)(a.R + (b.R - a.R) * t), (int)(a.G + (b.G - a.G) * t), (int)(a.B + (b.B - a.B) * t));
 
-        // Reads SDR#'s theme. Returns true if anything changed since the last call
+        // Reads SDR#'s theme and display settings. Returns true if anything changed since the last call
         public static bool Refresh(ISharpControl control)
         {
-            bool dark = true;
-            Color fore = Color.Empty, back = Color.Empty, panel = Color.Empty;
-            ColorBlend blend = null;
-            SpectrumStyle style = SpectrumStyle.StaticGradient;
-            string name = "";
-            try
-            {
-                dark = control.ThemeIsDark;
-                name = control.ThemeName ?? "";
-                fore = control.ThemeForeColor;
-                back = control.ThemeBackColor;
-                panel = control.ThemePanelColor;
-                blend = control.SpectrumGradient;
-                style = control.FFTSpectrumStyle;
-            }
-            catch { }
+            object dark = GetProp(control, "ThemeIsDark");
+            bool hasThemes = dark is bool;
+            bool isDark = !hasThemes || (bool)dark;      // Older SDR#: dark spectrum on standard windows
+            object fore = GetProp(control, "ThemeForeColor");
+            object back = GetProp(control, "ThemeBackColor");
+            object panel = GetProp(control, "ThemePanelColor");
+            object name = GetProp(control, "ThemeName");
+            var blend = GetProp(control, "SpectrumGradient") as ColorBlend ?? ParseGradient(GetSetting("spectrumAnalyzer.gradient"));
 
-            // SDR#'s spectrum colours (Display settings)
-            Color env = Color.White, peak = Color.Yellow, fill = Color.DodgerBlue;
-            try
-            {
-                env = Utils.GetColorSetting("spectrumAnalyzer.envelopeColor", Color.White);
-                peak = Utils.GetColorSetting("spectrumAnalyzer.peakColor", Color.Yellow);
-                fill = Utils.GetColorSetting("spectrumAnalyzer.fillColor", Color.DodgerBlue);
-            }
-            catch { }
+            object styleObj = GetProp(control, "FFTSpectrumStyle");
+            int style = (int)SpecStyle.StaticGradient;
+            if (styleObj != null) { try { style = Convert.ToInt32(styleObj, CultureInfo.InvariantCulture); } catch { } }
+            else if (int.TryParse(GetSetting("spectrumStyle"), NumberStyles.Integer, CultureInfo.InvariantCulture, out int s)) { style = s; }
+            if (!Enum.IsDefined(typeof(SpecStyle), style)) { style = (int)SpecStyle.StaticGradient; }
 
-            string newKey = string.Join("|", dark, name, fore.ToArgb(), back.ToArgb(), panel.ToArgb(), style, env.ToArgb(), peak.ToArgb(), fill.ToArgb(),
-                                        blend == null ? "" : string.Join(",", Array.ConvertAll(blend.Colors, c => c.ToArgb())));
+            Color env = GetColorSetting("spectrumAnalyzer.envelopeColor", Color.White);
+            Color peak = GetColorSetting("spectrumAnalyzer.peakColor", Color.Yellow);
+            Color fill = GetColorSetting("spectrumAnalyzer.fillColor", Color.DodgerBlue);
+
+            string newKey = string.Join("|", hasThemes, isDark, name, Valid(fore, Color.Empty).ToArgb(), Valid(back, Color.Empty).ToArgb(),
+                                        Valid(panel, Color.Empty).ToArgb(), style, env.ToArgb(), peak.ToArgb(), fill.ToArgb(),
+                                        blend == null ? "" : string.Join(",", Array.ConvertAll(blend.Colors, c => c.ToArgb().ToString())));
             if (newKey == key) { return false; }
             key = newKey;
 
-            Dark = dark;
-            Background = Valid(back, dark ? Color.Black : Color.White);
-            Toolbar = Valid(panel, dark ? Color.FromArgb(24, 24, 24) : Color.FromArgb(240, 240, 240));
-            Text = Valid(fore, dark ? Color.FromArgb(220, 220, 220) : Color.Black);
+            HasThemes = hasThemes;
+            Dark = isDark;
+            if (hasThemes)
+            {
+                Background = Valid(back, isDark ? Color.Black : Color.White);
+                Text = Valid(fore, isDark ? Color.FromArgb(220, 220, 220) : Color.Black);
+                Toolbar = Valid(panel, isDark ? Color.FromArgb(24, 24, 24) : Color.FromArgb(240, 240, 240));
+                ToolbarText = Text;
+            }
+            else
+            {
+                // Classic SDR#: black spectrum, standard Windows controls around it
+                Background = Color.Black;
+                Text = Color.FromArgb(220, 220, 220);
+                Toolbar = SystemColors.Control;
+                ToolbarText = SystemColors.ControlText;
+            }
+            ToolbarDim = Mix(Toolbar, ToolbarText, 0.55f);
             AxisText = Mix(Background, Text, 0.85f);
             Dim = Mix(Background, Text, 0.55f);
             Grid = Mix(Background, Text, 0.22f);
             PlotBorder = Mix(Background, Text, 0.6f);
-            Trace = Valid(env, dark ? Color.White : Color.Black);
-            Peak = Valid(peak, Color.Yellow);
-            Fill = Valid(fill, Color.DodgerBlue);
-            Style = style;
-            gradient = (blend != null && blend.Colors != null && blend.Colors.Length >= 2) ? blend : DefaultGradient();
+            Trace = env;
+            Peak = peak;
+            Fill = fill;
+            Style = (SpecStyle)style;
+            gradient = (blend != null && blend.Colors != null && blend.Colors.Length >= 2) ? blend : ParseGradient(DEFAULT_GRADIENT);
 
-            // Status colours that stay readable on light themes
-            Marker = dark ? Color.FromArgb(170, 255, 200, 0) : Color.FromArgb(200, 190, 120, 0);
-            Warn = dark ? Color.FromArgb(255, 166, 0) : Color.FromArgb(200, 110, 0);
-            Over = dark ? Color.FromArgb(255, 51, 51) : Color.FromArgb(210, 0, 0);
-            Good = dark ? Color.FromArgb(77, 217, 77) : Color.FromArgb(0, 140, 0);
+            // Status colours that stay readable on light backgrounds
+            bool darkPlot = Background.GetBrightness() < 0.5f;
+            Marker = darkPlot ? Color.FromArgb(170, 255, 200, 0) : Color.FromArgb(200, 190, 120, 0);
+            Warn = darkPlot ? Color.FromArgb(255, 166, 0) : Color.FromArgb(200, 110, 0);
+            Over = darkPlot ? Color.FromArgb(255, 51, 51) : Color.FromArgb(210, 0, 0);
+            Good = darkPlot ? Color.FromArgb(77, 217, 77) : Color.FromArgb(0, 140, 0);
             return true;
         }
 
@@ -106,12 +178,12 @@ namespace SDRSharp.MPXAnalyzer.Gui
         {
             switch (Style)
             {
-                case SpectrumStyle.SolidFill:
+                case SpecStyle.SolidFill:
                     return new SolidBrush(Fill);
-                case SpectrumStyle.StaticGradient:
-                case SpectrumStyle.DynamicGradient:
+                case SpecStyle.StaticGradient:
+                case SpecStyle.DynamicGradient:
                     // Static: the gradient spans the plot height. Dynamic: it spans from the trace's peak down
-                    float top = (Style == SpectrumStyle.DynamicGradient) ? Math.Min(traceTop, plot.Bottom - 2) : plot.Top;
+                    float top = (Style == SpecStyle.DynamicGradient) ? Math.Min(traceTop, plot.Bottom - 2) : plot.Top;
                     var rect = RectangleF.FromLTRB(plot.Left, top - 1, plot.Right, plot.Bottom + 1);
                     var brush = new LinearGradientBrush(rect, Color.White, Color.Black, LinearGradientMode.Vertical);
                     brush.InterpolationColors = gradient;
@@ -121,11 +193,21 @@ namespace SDRSharp.MPXAnalyzer.Gui
             }
         }
 
-        // Standard controls (buttons, check boxes) and the title bar, as SDR# does for its own windows
+        // Standard controls and the title bar, themed by SDR#'s ThemeService as SDR# does for its own windows
+        // (current SDR# only; older builds use standard Windows controls)
         public static void ApplyTo(Form form)
         {
-            try { ThemeService.ApplyThemeToGui(form, Dark, true); } catch { }
-            try { if (form.IsHandleCreated) { ThemeService.UseImmersiveDarkMode(form.Handle, Dark); } } catch { }
+            if (!HasThemes) { return; }
+            try
+            {
+                var svc = Type.GetType("SDRSharp.PanView.ThemeService, SDRSharp.PanView", false);
+                svc?.GetMethod("ApplyThemeToGui", new[] { typeof(Form), typeof(bool), typeof(bool) })?.Invoke(null, new object[] { form, Dark, true });
+                if (form.IsHandleCreated)
+                {
+                    svc?.GetMethod("UseImmersiveDarkMode", new[] { typeof(IntPtr), typeof(bool) })?.Invoke(null, new object[] { form.Handle, Dark });
+                }
+            }
+            catch { }
         }
     }
 }

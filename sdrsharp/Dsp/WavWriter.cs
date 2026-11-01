@@ -81,7 +81,7 @@ namespace SDRSharp.MPXAnalyzer.Dsp
                 case WavSampleType.Int16:
                     for (int i = 0; i < count; i++)
                     {
-                        float x = Math.Clamp(data[i], -1.0f, 1.0f);
+                        float x = MathUtil.Clamp(data[i], -1.0f, 1.0f);
                         short s = (short)Math.Round(x * 32767.0f);
                         buffer[2 * i] = (byte)s;
                         buffer[2 * i + 1] = (byte)(s >> 8);
@@ -90,7 +90,7 @@ namespace SDRSharp.MPXAnalyzer.Dsp
                 case WavSampleType.Int32:
                     for (int i = 0; i < count; i++)
                     {
-                        double x = Math.Clamp(data[i], -1.0f, 1.0f);
+                        double x = MathUtil.Clamp(data[i], -1.0f, 1.0f);
                         int s = (int)Math.Round(x * 2147483647.0);
                         buffer[4 * i] = (byte)s;
                         buffer[4 * i + 1] = (byte)(s >> 8);

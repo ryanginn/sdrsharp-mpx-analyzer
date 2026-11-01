@@ -14,7 +14,14 @@ namespace SDRSharp.MPXAnalyzer
     // The plugin taps SDR#'s decimated and filtered IQ, i.e. the Radio's own channel after its IF filter, so it
     // always follows the frequency and filter bandwidth set in SDR#'s main window. It FM-demodulates that IQ
     // itself, so the MPX scaling (+/-1.0 = 75kHz deviation) doesn't depend on SDR#'s audio settings.
+    //
+    // Built twice: for .NET 8 (current SDR#) and for .NET Framework 4.6 (older 32-bit SDR#, e.g. 1716), which
+    // doesn't have the lazy loading and menu name interfaces.
+#if NETCOREAPP
     public class MpxPlugin : ISharpPlugin, ICanLazyLoadGui, IExtendedNameProvider
+#else
+    public class MpxPlugin : ISharpPlugin
+#endif
     {
         ISharpControl control;
         MpxChain chain;

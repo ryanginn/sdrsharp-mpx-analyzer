@@ -14,7 +14,7 @@ namespace SDRSharp.MPXAnalyzer.Gui
 
         readonly Font valueFont;
         readonly ToolTip toolTip = new ToolTip { InitialDelay = 300, ReshowDelay = 100 };
-        readonly List<(RectangleF rect, string tip)> tips = new List<(RectangleF, string)>();
+        readonly List<KeyValuePair<RectangleF, string>> tips = new List<KeyValuePair<RectangleF, string>>();
         string shownTip;
 
         MpxMeasurements meas;
@@ -82,7 +82,7 @@ namespace SDRSharp.MPXAnalyzer.Gui
                 using (var b = new SolidBrush(dim)) { g.DrawString(label, Font, b, x, y); }
                 var size = g.MeasureString(value, Font);
                 using (var b = new SolidBrush(col)) { g.DrawString(value, Font, b, x + w - size.Width, y); }
-                if (tip != null) { tips.Add((new RectangleF(x, y, w, lineH), tip)); }
+                if (tip != null) { tips.Add(new KeyValuePair<RectangleF, string>(new RectangleF(x, y, w, lineH), tip)); }
                 y += lineH;
             }
             void Gap() => y += lineH * 0.5f;
@@ -91,7 +91,7 @@ namespace SDRSharp.MPXAnalyzer.Gui
             Label(valid && meas.PowerSeconds < 59.95f ? string.Format("MPX power ({0:0} s)", meas.PowerSeconds) : "MPX power (60 s)");
             float powerY = y;
             Value(valid ? string.Format("{0:+0.0;-0.0;0.0} dBr", meas.PowerDBr) : "--.- dBr", valid ? (meas.PowerDBr > PowerLimitDBr ? Theme.Warn : normal) : dim);
-            tips.Add((new RectangleF(x, powerY, w, valueH), string.Format("MPX power (ITU-R BS.412): 0 dBr = power of a sine at ±19 kHz deviation.\nAmber above the {0:+0.0;-0.0;0.0} dBr limit (set in the plugin panel).", PowerLimitDBr)));
+            tips.Add(new KeyValuePair<RectangleF, string>(new RectangleF(x, powerY, w, valueH), string.Format("MPX power (ITU-R BS.412): 0 dBr = power of a sine at ±19 kHz deviation.\nAmber above the {0:+0.0;-0.0;0.0} dBr limit (set in the plugin panel).", PowerLimitDBr)));
             Row("1 s", valid ? string.Format("{0:+0.0;-0.0;0.0} dBr", meas.PowerShortDBr) : "--.- dBr", dim);
             Gap();
 
@@ -100,7 +100,7 @@ namespace SDRSharp.MPXAnalyzer.Gui
             float resp = valid ? meas.PeakResponseSec : 0.0f;
             float devY = y;
             Label(resp <= 0.0f ? "Deviation (1 s peak)" : resp < 1e-3f ? string.Format("Deviation ({0:0} µs)", resp * 1e6f) : string.Format("Deviation ({0:0.#} ms)", resp * 1e3f));
-            tips.Add((new RectangleF(x, devY, w, lineH + valueH), resp <= 0.0f
+            tips.Add(new KeyValuePair<RectangleF, string>(new RectangleF(x, devY, w, lineH + valueH), resp <= 0.0f
                 ? "Peak deviation over the last second (true sample peak)"
                 : string.Format("Peak deviation over the last second, quasi-peak with {0:0} µs response time:\npeaks shorter than that read lower", resp * 1e6f)));
             Value(valid ? FormatLevel(meas.PeakDevKHz, LevelPercent, false) : noLevel, valid ? (meas.PeakDevKHz > MAX_DEV_KHZ ? Theme.Over : normal) : dim);
@@ -159,9 +159,9 @@ namespace SDRSharp.MPXAnalyzer.Gui
         protected override void OnMouseMove(MouseEventArgs e)
         {
             string tip = null;
-            foreach (var (rect, t) in tips)
+            foreach (var t in tips)
             {
-                if (rect.Contains(e.Location)) { tip = t; break; }
+                if (t.Key.Contains(e.Location)) { tip = t.Value; break; }
             }
             if (tip != shownTip)
             {

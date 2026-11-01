@@ -211,30 +211,57 @@ jobs:
           with:
               dotnet-version: ${{ steps.sdrsharp.outputs.dotnet }}
 
-        - name: Build
-          run: dotnet build sdrsharp/SDRSharp.MPXAnalyzer.csproj -c Release "-p:SdrSharpDir=${{ steps.sdrsharp.outputs.dir }}" "-p:TargetFramework=${{ steps.sdrsharp.outputs.tfm }}" -o sdrsharp_build
+        # Current SDR# (.NET 8, also loads in SDR#'s .NET 9 build)
+        - name: Build (current SDR#)
+          run: dotnet build sdrsharp/SDRSharp.MPXAnalyzer.csproj -c Release -f ${{ steps.sdrsharp.outputs.tfm }} "-p:SdrSharpDir=${{ steps.sdrsharp.outputs.dir }}" -o sdrsharp_build
 
-        - name: Smoke test
+        - name: Smoke test (current SDR#)
           run: |
-            dotnet build sdrsharp/smoketest/SmokeTest.csproj -c Release "-p:SdrSharpDir=${{ steps.sdrsharp.outputs.dir }}" "-p:TargetFramework=${{ steps.sdrsharp.outputs.tfm }}" -o smoketest_build
+            dotnet build sdrsharp/smoketest/SmokeTest.csproj -c Release -f ${{ steps.sdrsharp.outputs.tfm }} "-p:SdrSharpDir=${{ steps.sdrsharp.outputs.dir }}" -o smoketest_build
             if ($LASTEXITCODE -ne 0) { throw "Smoke test build failed" }
-            $p = Start-Process smoketest_build/SmokeTest.exe -ArgumentList "`"${{ steps.sdrsharp.outputs.dir }}`"", "`"$PWD/smoketest_out`"" -Wait -PassThru -NoNewWindow -RedirectStandardOutput smoketest.log
+            $p = Start-Process smoketest_build/SmokeTest.exe -ArgumentList "`"${{ steps.sdrsharp.outputs.dir }}`"", "`"$PWD/smoketest_out/current`"" -Wait -PassThru -NoNewWindow -RedirectStandardOutput smoketest.log
             Get-Content smoketest.log
+            if ($p.ExitCode -ne 0) { throw "Smoke test failed" }
+
+        # Older 32-bit SDR# on .NET Framework (e.g. 1716). SDR# can't be redistributed, so this builds against the
+        # compile-only stand-ins in sdrsharp/legacy-ref (same API as SDR# 1716, see its README)
+        - name: Build (older SDR#, .NET Framework)
+          run: |
+            dotnet build sdrsharp/legacy-ref/Common/SDRSharp.Common.csproj -c Release -o legacy_ref
+            if ($LASTEXITCODE -ne 0) { throw "Reference assemblies build failed" }
+            dotnet build sdrsharp/SDRSharp.MPXAnalyzer.csproj -c Release -f net46 "-p:SdrSharpDir=$PWD/legacy_ref" -o sdrsharp_build_legacy
+            if ($LASTEXITCODE -ne 0) { throw "Build failed" }
+
+        - name: Smoke test (older SDR#, 32-bit .NET Framework)
+          run: |
+            dotnet build sdrsharp/smoketest/SmokeTest.csproj -c Release -f net46 "-p:SdrSharpDir=$PWD/legacy_ref" -o smoketest_build_legacy
+            if ($LASTEXITCODE -ne 0) { throw "Smoke test build failed" }
+            $p = Start-Process smoketest_build_legacy/SmokeTest.exe -ArgumentList "`"$PWD/legacy_ref`"", "`"$PWD/smoketest_out/legacy`"" -Wait -PassThru -NoNewWindow -RedirectStandardOutput smoketest_legacy.log
+            Get-Content smoketest_legacy.log
             if ($p.ExitCode -ne 0) { throw "Smoke test failed" }
 
         - name: Package
           run: |
-            mkdir dist
+            mkdir dist, dist_legacy
             cp sdrsharp_build/SDRSharp.MPXAnalyzer.dll dist/
             cp sdrsharp/README.md, LICENSE dist/
-            "Built against SDR# ${{ steps.sdrsharp.outputs.version }} (${{ steps.sdrsharp.outputs.tfm }})" | Out-File -Encoding utf8 dist/SDRSHARP_VERSION.txt
-            Get-Content dist/SDRSHARP_VERSION.txt
+            "For current SDR# (.NET 8 and .NET 9 builds). Built against SDR# ${{ steps.sdrsharp.outputs.version }} (${{ steps.sdrsharp.outputs.tfm }})" | Out-File -Encoding utf8 dist/SDRSHARP_VERSION.txt
+            cp sdrsharp_build_legacy/SDRSharp.MPXAnalyzer.dll dist_legacy/
+            cp sdrsharp/README.md, LICENSE dist_legacy/
+            "For older 32-bit SDR# on .NET Framework (e.g. 1716). Install: copy the DLL into SDR#'s folder and add it to Plugins.xml (see README.md)" | Out-File -Encoding utf8 dist_legacy/SDRSHARP_VERSION.txt
+            Get-Content dist/SDRSHARP_VERSION.txt, dist_legacy/SDRSHARP_VERSION.txt
 
-        - name: Upload
+        - name: Upload (current SDR#)
           uses: actions/upload-artifact@v4
           with:
               name: mpx_analyzer_sdrsharp
               path: dist/
+
+        - name: Upload (older SDR#)
+          uses: actions/upload-artifact@v4
+          with:
+              name: mpx_analyzer_sdrsharp_legacy
+              path: dist_legacy/
 
         - name: Upload smoke test screenshots
           if: always()
@@ -279,7 +306,8 @@ jobs:
             | \`mpx_analyzer_windows_x64_${GITHUB_REF_NAME}.zip\` | Windows 64-bit | Copy \`mpx_analyzer.dll\` into SDR++'s \`modules\` folder |
             | \`mpx_analyzer_macos_arm_${GITHUB_REF_NAME}.zip\` | Mac, Apple Silicon | \`xattr -d com.apple.quarantine mpx_analyzer.dylib\`, then copy it to \`/Applications/SDR++.app/Contents/Plugins/\` |
             | \`mpx_analyzer_macos_intel_${GITHUB_REF_NAME}.zip\` | Mac, Intel | As above |
-            | \`mpx_analyzer_sdrsharp_${GITHUB_REF_NAME}.zip\` | SDR# (Windows) | Copy \`SDRSharp.MPXAnalyzer.dll\` into SDR#'s \`Plugins\` folder. $(cat artifacts/mpx_analyzer_sdrsharp/SDRSHARP_VERSION.txt | tr -d '\r\n' | sed 's/^\xEF\xBB\xBF//') |
+            | \`mpx_analyzer_sdrsharp_${GITHUB_REF_NAME}.zip\` | Current SDR# (.NET 8/9) | Copy \`SDRSharp.MPXAnalyzer.dll\` into SDR#'s \`Plugins\` folder |
+            | \`mpx_analyzer_sdrsharp_legacy_${GITHUB_REF_NAME}.zip\` | Older 32-bit SDR# (.NET Framework, e.g. 1716) | Copy \`SDRSharp.MPXAnalyzer.dll\` into SDR#'s folder and add it to \`Plugins.xml\` (see README) |
 
             Linux: build from source, see the README. Then start SDR++ and add an \`mpx_analyzer\` instance in Module Manager.
             EOF

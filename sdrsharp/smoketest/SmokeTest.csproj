@@ -2,11 +2,11 @@
 
   <!-- Windows only: loads the plugin with the real SDR# assemblies and a stand-in for SDR#'s ISharpControl, feeds it
        a synthetic FM signal, checks the readings and saves screenshots of the plugin panel and the MPX window.
-       Build with -p:SdrSharpDir=(folder with the SDR# assemblies), then run: SmokeTest.exe (that folder) (output folder) -->
+       Build with -f net8.0-windows or -f net46 and -p:SdrSharpDir=(folder with the SDR# assemblies), then run: SmokeTest.exe (that folder) (output folder) -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
-    <UseWindowsForms>true</UseWindowsForms>
+    <TargetFrameworks>net8.0-windows;net46</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Nullable>disable</Nullable>
@@ -14,14 +14,24 @@
     <SdrSharpDir Condition="'$(SdrSharpDir)' == ''">$(MSBuildThisFileDirectory)../sdrsharp-bin</SdrSharpDir>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net8.0-windows'">
+    <UseWindowsForms>true</UseWindowsForms>
+  </PropertyGroup>
+
+  <!-- Older SDR# runs as a 32-bit .NET Framework process -->
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net46'">
+    <PlatformTarget>x86</PlatformTarget>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net46'">
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Drawing" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="../SDRSharp.MPXAnalyzer.csproj" />
     <Reference Include="SDRSharp.Common">
       <HintPath>$(SdrSharpDir)/SDRSharp.Common.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="SDRSharp.PanView">
-      <HintPath>$(SdrSharpDir)/SDRSharp.PanView.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="SDRSharp.Radio">

@@ -5,21 +5,50 @@ using System.Drawing.Imaging;
 using System.IO;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+#if NETCOREAPP
 using System.Runtime.Loader;
+#else
+using System.Runtime.Remoting.Messaging;
+using System.Runtime.Remoting.Proxies;
+#endif
 using System.Threading;
 using System.Windows.Forms;
 using SDRSharp.Common;
 using SDRSharp.MPXAnalyzer;
 using SDRSharp.Radio;
 
-// Stand-in for SDR#: answers the ISharpControl calls the plugin makes, and keeps the stream hook it registers
+// Stand-in for SDR#: answers the ISharpControl calls the plugin makes, and keeps the stream hook it registers.
+// DispatchProxy on .NET 8, RealProxy on .NET Framework (older SDR#)
+#if NETCOREAPP
 public class FakeControl : DispatchProxy
+{
+    protected override object Invoke(MethodInfo method, object[] args) => FakeSdr.Answer(method, args);
+
+    public static ISharpControl Create() => Create<ISharpControl, FakeControl>();
+}
+#else
+public class FakeControl : RealProxy
+{
+    FakeControl() : base(typeof(ISharpControl)) { }
+
+    public override IMessage Invoke(IMessage msg)
+    {
+        var call = (IMethodCallMessage)msg;
+        object result = FakeSdr.Answer((MethodInfo)call.MethodBase, call.Args);
+        return new ReturnMessage(result, null, 0, call.LogicalCallContext, call);
+    }
+
+    public static ISharpControl Create() => (ISharpControl)new FakeControl().GetTransparentProxy();
+}
+#endif
+
+public static class FakeSdr
 {
     public static object Hook;
     public static bool Dark = true;
     public static ProcessorType HookType;
 
-    protected override object Invoke(MethodInfo method, object[] args)
+    public static object Answer(MethodInfo method, object[] args)
     {
         switch (method.Name)
         {
@@ -40,8 +69,12 @@ public class FakeControl : DispatchProxy
             case "get_ThemeForeColor": return Dark ? Color.FromArgb(220, 220, 220) : Color.Black;
             case "get_ThemeBackColor": return Dark ? Color.Black : Color.White;
             case "get_ThemePanelColor": return Dark ? Color.FromArgb(24, 24, 24) : Color.FromArgb(240, 240, 240);
-            case "get_SpectrumGradient": return Utils.ParseGradient("FFFFFF,ADD8E6,1E90FF,000050,000000", 255);
-            case "get_FFTSpectrumStyle": return SDRSharp.PanView.SpectrumStyle.StaticGradient;
+            case "get_SpectrumGradient":
+                var blend = new System.Drawing.Drawing2D.ColorBlend(5);
+                blend.Colors = new[] { Color.White, Color.LightBlue, Color.DodgerBlue, Color.FromArgb(0, 0, 80), Color.Black };
+                blend.Positions = new[] { 0.0f, 0.25f, 0.5f, 0.75f, 1.0f };
+                return blend;
+            case "get_FFTSpectrumStyle": return Enum.ToObject(method.ReturnType, 3);    // StaticGradient
         }
         var t = method.ReturnType;
         return (t != typeof(void) && t.IsValueType) ? Activator.CreateInstance(t) : null;
@@ -59,12 +92,20 @@ static class Program
         string outDir = args[1];
         Directory.CreateDirectory(outDir);
 
-        // Other SDR# assemblies that SDRSharp.Common/Radio refer to
+        // SDR#'s assemblies are loaded from its folder
+#if NETCOREAPP
         AssemblyLoadContext.Default.Resolving += (ctx, name) =>
         {
             string path = Path.Combine(sdrDir, name.Name + ".dll");
             return File.Exists(path) ? ctx.LoadFromAssemblyPath(path) : null;
         };
+#else
+        AppDomain.CurrentDomain.AssemblyResolve += (o, e) =>
+        {
+            string path = Path.Combine(sdrDir, new AssemblyName(e.Name).Name + ".dll");
+            return File.Exists(path) ? Assembly.LoadFrom(path) : null;
+        };
+#endif
         try
         {
             if (args.Length > 2 && args[2] == "--api-dump") { return DumpApi(sdrDir); }
@@ -83,11 +124,11 @@ static class Program
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
 
-        var control = DispatchProxy.Create<ISharpControl, FakeControl>();
+        var control = FakeControl.Create();
         var plugin = new MpxPlugin();
         plugin.Initialize(control);
-        Console.WriteLine($"Plugin: {plugin.DisplayName}, hook {FakeControl.Hook?.GetType().Name} on {FakeControl.HookType}");
-        if (!(FakeControl.Hook is IIQProcessor hook)) { Console.WriteLine("FAIL: no IQ hook registered"); return 1; }
+        Console.WriteLine($"Plugin: {plugin.DisplayName}, hook {FakeSdr.Hook?.GetType().Name} on {FakeSdr.HookType}");
+        if (!(FakeSdr.Hook is IIQProcessor hook)) { Console.WriteLine("FAIL: no IQ hook registered"); return 1; }
 
         // The side panel, as SDR# would host it
         var host = new Form { Text = "SDR# side panel (test host)", Width = 280, Height = 560, StartPosition = FormStartPosition.Manual, Location = new Point(10, 10) };
@@ -146,7 +187,7 @@ static class Program
         }
 
         // Same window after switching SDR# to a light theme
-        FakeControl.Dark = false;
+        FakeSdr.Dark = false;
         if (SDRSharp.MPXAnalyzer.Gui.Theme.Refresh(control))
         {
             foreach (Form f in Application.OpenForms)
@@ -175,7 +216,7 @@ static class Program
         foreach (var file in Directory.GetFiles(sdrDir, "SDRSharp*.dll"))
         {
             Assembly asm;
-            try { asm = AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.GetFullPath(file)); }
+            try { asm = Assembly.LoadFrom(Path.GetFullPath(file)); }
             catch (Exception e) { Console.WriteLine($"## {Path.GetFileName(file)}: {e.Message}"); continue; }
             Console.WriteLine($"## {asm.GetName().Name}");
             Type[] types;
