@@ -73,9 +73,11 @@ Both contain a file called `SDRSharp.MPXAnalyzer.dll`; use the one that matches 
 **Current SDR#:**
 1. Close SDR#.
 2. Copy `SDRSharp.MPXAnalyzer.dll` into SDR#'s `Plugins` folder.
-3. Start SDR#. You get two panels:
-   - **MPX Spectrum**: the spectrum and meters. It's docked in SDR#'s main window, below the spectrum and waterfall, with SDR#'s IF, Audio and FM MPX spectra. Like them, it can be moved, tabbed, floated or closed.
-   - **MPX Analyzer**: the settings and recording, in SDR#'s plugin list (*Analysis* category).
+3. Start SDR#. The *Plugins* menu has two new panels, *Analysis : MPX Analyzer* and *Analysis : MPX Spectrum*. Tick one to show it, untick it to hide it:
+   - **MPX Spectrum**: the spectrum and meters. It's a dock panel like SDR#'s built-in FM MPX Spectrum: drag its tab to dock it, e.g. below the waterfall next to the other spectra, tab it, float it or close it.
+   - **MPX Analyzer**: the settings and recording.
+
+   If a panel won't dock where you drag it, reset the window arrangement from SDR#'s *Layout* menu.
 
 **Older SDR# (e.g. 1716):**
 1. Close SDR#.
@@ -93,7 +95,7 @@ If SDR# is updated to a new .NET version, rebuild the plugin (or download a newe
 
 1. Tune SDR# to an FM broadcast station in **WFM** mode, and set the filter bandwidth to about 200–250 kHz.
 2. Open the spectrum:
-   - **Current SDR#:** the **MPX Spectrum** panel is docked below SDR#'s spectrum. Drag its tab to move it.
+   - **Current SDR#:** open *Plugins* → *Analysis : MPX Spectrum*, then dock it where you like. SDR# remembers the layout.
    - **Older SDR#** (no dock panels): open the **MPX Analyzer** panel and press **Show MPX window**. The window remembers its position, and reopens with SDR# if it was open when SDR# closed.
 3. The spectrum follows SDR#'s theme (dark or light, changed while running too) and its spectrum display settings: spectrum style (gradient, solid fill or line), gradient, envelope, fill and peak colours, drawn the way SDR#'s own spectra draw them. The peak hold trace uses SDR#'s peak colour.
 4. The spectrum uses the panel's full height. The column on its right has:

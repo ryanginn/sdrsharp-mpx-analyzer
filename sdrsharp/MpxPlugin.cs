@@ -11,9 +11,9 @@ namespace SDRSharp.MPXAnalyzer
     // always follows the frequency and filter bandwidth set in SDR#'s main window. It FM-demodulates that IQ
     // itself, so the MPX scaling (+/-1.0 = 75kHz deviation) doesn't depend on SDR#'s audio settings.
     //
-    // Built twice: for .NET 8 (current SDR#), where the spectrum is docked in SDR#'s main window like its own FM MPX
-    // Spectrum (a "front control"), and for .NET Framework 4.6 (older 32-bit SDR#, e.g. 1716), where it's a
-    // floating window opened from this panel.
+    // Built twice: for .NET 8 (current SDR#), where the spectrum is a second plugin panel (MpxSpectrumPlugin) that
+    // SDR# docks, closes and lists in its menu exactly like its own FM MPX Spectrum, and for .NET Framework 4.6
+    // (older 32-bit SDR#, e.g. 1716), where it's a floating window opened from this panel.
 #if NETCOREAPP
     public class MpxPlugin : ISharpPlugin, ICanLazyLoadGui, IExtendedNameProvider
 #else
@@ -22,9 +22,6 @@ namespace SDRSharp.MPXAnalyzer
     {
         MpxCore core;
         ControlPanel gui;
-#if NETCOREAPP
-        MpxDisplay display;
-#endif
 
         public string DisplayName => "MPX Analyzer";
 
@@ -57,23 +54,13 @@ namespace SDRSharp.MPXAnalyzer
         public void Initialize(ISharpControl control)
         {
             core = MpxCore.Acquire(control);
-#if NETCOREAPP
-            // The spectrum goes in SDR#'s main dock area, below the spectrum/waterfall by default, where the IF,
-            // Audio and FM MPX spectra are. SDR# handles docking, tabbing, floating and closing it
-            core.StartGui();
-            display = new MpxDisplay(core);
-            core.AddDisplay(display);
-            control.RegisterFrontControl(display, PluginPosition.Bottom);
-#endif
         }
 
         public void Close()
         {
             if (core == null) { return; }
             if (core.Panel == gui) { core.Panel = null; }
-#if NETCOREAPP
-            if (display != null) { core.RemoveDisplay(display); }
-#endif
+
             MpxCore.Release();
             core = null;
         }
@@ -81,4 +68,55 @@ namespace SDRSharp.MPXAnalyzer
         internal MpxCore Core => core;
     }
 
+#if NETCOREAPP
+    // The spectrum and meters as their own plugin panel. SDR# gives every plugin panel the same dock window as its
+    // built-in FFT panels (FM MPX Spectrum etc.): dockable anywhere including below the waterfall, tabbable,
+    // floatable, closable, and shown/hidden from the Plugins menu
+    public class MpxSpectrumPlugin : ISharpPlugin, ICanLazyLoadGui, IExtendedNameProvider, IPreferedDockPosition
+    {
+        MpxCore core;
+        MpxDisplay gui;
+
+        public string DisplayName => "MPX Spectrum";
+
+        public string Category => "Analysis";
+
+        public string MenuItemName => DisplayName;
+
+        public DockStyle DockPosition => DockStyle.Bottom;
+
+        public bool IsActive => gui != null && gui.Visible;
+
+        public UserControl Gui
+        {
+            get
+            {
+                LoadGui();
+                return gui;
+            }
+        }
+
+        public void LoadGui()
+        {
+            if (gui != null) { return; }
+            gui = new MpxDisplay(core);
+            core.AddDisplay(gui);
+        }
+
+        public void Initialize(ISharpControl control)
+        {
+            core = MpxCore.Acquire(control);
+        }
+
+        public void Close()
+        {
+            if (core == null) { return; }
+            if (gui != null) { core.RemoveDisplay(gui); }
+            MpxCore.Release();
+            core = null;
+        }
+
+        internal MpxCore Core => core;
+    }
+#endif
 }

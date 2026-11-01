@@ -211,22 +211,6 @@ jobs:
           with:
               dotnet-version: ${{ steps.sdrsharp.outputs.dotnet }}
 
-        # TEMPORARY diagnostics (interoperability): how SDR# docks plugin panels. Prints only short excerpts
-        - name: SDR# docking diagnostics
-          continue-on-error: true
-          run: |
-            dotnet tool install -g ilspycmd
-            ilspycmd "${{ steps.sdrsharp.outputs.dir }}/SDRSharp.dll" -o sdr_decomp -p 2>&1 | Select-Object -Last 3
-            $files = Get-ChildItem sdr_decomp -Recurse -Filter *.cs
-            $main = Get-ChildItem sdr_decomp -Recurse -Filter MainForm.cs | Select-Object -First 1
-            $lines = Get-Content $main.FullName
-            "===== MainForm 2436-2470"
-            $lines[2435..2469]
-            "===== Plugin discovery"
-            Get-ChildItem sdr_decomp -Recurse -Filter *.cs | Select-String -Pattern "IsAssignableFrom|typeof\(ISharpPlugin\)|GetExportedTypes\(|\.GetTypes\(\)|PluginInstance\(" | Select-Object -First 15 | ForEach-Object { "--- $($_.Path | Split-Path -Leaf):$($_.LineNumber)"; $_.Context; $_.Line.Trim() }
-            $disc = Get-ChildItem sdr_decomp -Recurse -Filter *.cs | Select-String -Pattern "typeof\(ISharpPlugin\)\.IsAssignableFrom|IsAssignableFrom" | Select-Object -First 2
-            foreach ($d in $disc) { $l = Get-Content $d.Path; "=== $($d.Path | Split-Path -Leaf):$($d.LineNumber)"; $l[[Math]::Max(0,$d.LineNumber-25)..($d.LineNumber+20)] }
-
         # Current SDR# (.NET 8, also loads in SDR#'s .NET 9 build)
         - name: Build (current SDR#)
           run: dotnet build sdrsharp/SDRSharp.MPXAnalyzer.csproj -c Release -f ${{ steps.sdrsharp.outputs.tfm }} "-p:SdrSharpDir=${{ steps.sdrsharp.outputs.dir }}" -o sdrsharp_build

@@ -142,13 +142,14 @@ static class Program
         host.Show();
 
 #if NETCOREAPP
-        // Current SDR#: the display is registered as a front control (docked in the main window), hosted here as
-        // SDR# would
-        if (FakeSdr.FrontControl == null) { Console.WriteLine("FAIL: no front control registered"); return 1; }
-        Console.WriteLine($"Front control: {FakeSdr.FrontControl.Text}");
-        var dockHost = new Form { Text = "MPX Spectrum (front control test host)", Width = 900, Height = 280, StartPosition = FormStartPosition.Manual, Location = new Point(300, 10) };
-        FakeSdr.FrontControl.Dock = DockStyle.Fill;
-        dockHost.Controls.Add(FakeSdr.FrontControl);
+        // Current SDR#: the MPX Spectrum plugin panel, hosted here the way SDR# docks plugin panels
+        var spectrumPlugin = new MpxSpectrumPlugin();
+        spectrumPlugin.Initialize(control);
+        Console.WriteLine($"Plugin: {spectrumPlugin.DisplayName} ({spectrumPlugin.Category})");
+        var dockHost = new Form { Text = "MPX Spectrum (dock panel test host)", Width = 900, Height = 280, StartPosition = FormStartPosition.Manual, Location = new Point(300, 10) };
+        var panelGui = spectrumPlugin.Gui;
+        panelGui.Dock = DockStyle.Fill;
+        dockHost.Controls.Add(panelGui);
         dockHost.Show();
 #else
         // Older SDR#: floating window
@@ -213,6 +214,9 @@ static class Program
             if (f != host) { Save(f, Path.Combine(outDir, "mpx_window_light.png")); }
         }
 
+#if NETCOREAPP
+        spectrumPlugin.Close();
+#endif
         plugin.Close();
         host.Close();
         Console.WriteLine(failures == 0 ? "Smoke test passed" : "Smoke test FAILED");
