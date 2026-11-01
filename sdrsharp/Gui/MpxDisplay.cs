@@ -35,6 +35,19 @@ namespace SDRSharp.MPXAnalyzer.Gui
             MinimumSize = new Size(360, 150);
 
             spectrum = new SpectrumView { Dock = DockStyle.Fill };
+
+            // Right click on the spectrum toggles peak hold (also shows immediately, without waiting for the timer)
+            spectrum.MouseUp += (o, e) =>
+            {
+                if (e.Button != MouseButtons.Right) { return; }
+                core.SetPeakHold(!core.Settings.PeakHold);
+                updating = true;
+                peakHoldCheck.Checked = core.Settings.PeakHold;
+                updating = false;
+                resetPeakButton.Visible = core.Settings.PeakHold;
+                spectrum.PeakHold = core.Settings.PeakHold;
+                spectrum.Invalidate();
+            };
             meters = new MetersView { Dock = DockStyle.Fill };
             int rightWidth = meters.PreferredWidth;
 
