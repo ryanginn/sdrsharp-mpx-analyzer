@@ -91,12 +91,14 @@ namespace SDRSharp.MPXAnalyzer.Gui
             }
 
             // Frequency grid
-            double fStep = span > 50000.0 ? 10000.0 : 5000.0;
+            // Multiples of the 19 kHz pilot (19k, 38k, 57k, 76k, 95k), like SDR#'s FM MPX Spectrum. Halved when
+            // zoomed in so there are still a few lines
+            double fStep = span >= 40000.0 ? 19000.0 : 9500.0;
             for (double f = 0.0; f <= span + 1.0; f += fStep)
             {
                 float x = FToX(f);
                 g.DrawLine(gridPen, x, plot.Top, x, plot.Bottom);
-                string s = (f / 1000.0).ToString("0") + (f > 0.0 ? " k" : "");
+                string s = (f / 1000.0).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) + (f > 0.0 ? " k" : "");
                 var ts = g.MeasureString(s, Font);
                 g.DrawString(s, Font, axisBrush, Math.Min(x - ts.Width * 0.5f, plot.Right - ts.Width), plot.Bottom + 2);
             }
