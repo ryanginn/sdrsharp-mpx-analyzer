@@ -30,7 +30,7 @@ namespace SDRSharp.MPXAnalyzer.Gui
         public static Color PlotBorder = Color.FromArgb(160, 160, 160);
         public static Color Trace = Color.White;            // SDR#'s spectrum envelope colour
         public static Color Peak = Color.Yellow;            // SDR#'s spectrum peak colour
-        public static Color Fill = Color.DodgerBlue;        // SDR#'s spectrum fill colour (solid fill style)
+        public static Color Fill = Color.FromArgb(100, Color.DodgerBlue);        // SDR#'s spectrum fill colour (solid fill style)
         public static Color Marker = Color.FromArgb(170, 255, 200, 0);
         public static Color Warn = Color.FromArgb(255, 166, 0);
         public static Color Over = Color.FromArgb(255, 51, 51);
@@ -67,24 +67,26 @@ namespace SDRSharp.MPXAnalyzer.Gui
             catch { return null; }
         }
 
-        static Color GetColorSetting(string name, Color fallback)
+        // Colour setting; `defaultAlpha` applies when the setting has no alpha (as SDR# does it: its solid spectrum fill
+        // is drawn at alpha 100, i.e. the fill colour at ~40% over the background)
+        static Color GetColorSetting(string name, Color fallback, byte defaultAlpha)
         {
             try
             {
-                var m = RadioUtils?.GetMethod("GetColorSetting", new[] { typeof(string), typeof(Color) });
-                if (m != null) { return (Color)m.Invoke(null, new object[] { name, fallback }); }
+                var m = RadioUtils?.GetMethod("GetColorSetting", new[] { typeof(string), typeof(Color), typeof(byte) });
+                if (m != null) { return (Color)m.Invoke(null, new object[] { name, fallback, defaultAlpha }); }
             }
             catch { }
-            return ParseColor(GetSetting(name), fallback);
+            return ParseColor(GetSetting(name), fallback, defaultAlpha);
         }
 
         // "RRGGBB" or "AARRGGBB"
-        static Color ParseColor(string s, Color fallback)
+        static Color ParseColor(string s, Color fallback, byte defaultAlpha = 255)
         {
-            if (string.IsNullOrWhiteSpace(s)) { return fallback; }
+            if (string.IsNullOrWhiteSpace(s)) { return Color.FromArgb(defaultAlpha, fallback); }
             s = s.Trim().TrimStart('#');
-            if (!uint.TryParse(s, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out uint v)) { return fallback; }
-            return (s.Length <= 6) ? Color.FromArgb(255, (int)((v >> 16) & 0xFF), (int)((v >> 8) & 0xFF), (int)(v & 0xFF)) : Color.FromArgb((int)v);
+            if (!uint.TryParse(s, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out uint v)) { return Color.FromArgb(defaultAlpha, fallback); }
+            return (s.Length <= 6) ? Color.FromArgb(defaultAlpha, (int)((v >> 16) & 0xFF), (int)((v >> 8) & 0xFF), (int)(v & 0xFF)) : Color.FromArgb((int)v);
         }
 
         // SDR#'s gradient setting format: colours from top to bottom, e.g. "FFFFFF,ADD8E6,1E90FF,000050,000000"
@@ -125,9 +127,9 @@ namespace SDRSharp.MPXAnalyzer.Gui
             else if (int.TryParse(GetSetting("spectrumStyle"), NumberStyles.Integer, CultureInfo.InvariantCulture, out int s)) { style = s; }
             if (!Enum.IsDefined(typeof(SpecStyle), style)) { style = (int)SpecStyle.StaticGradient; }
 
-            Color env = GetColorSetting("spectrumAnalyzer.envelopeColor", Color.White);
-            Color peak = GetColorSetting("spectrumAnalyzer.peakColor", Color.Yellow);
-            Color fill = GetColorSetting("spectrumAnalyzer.fillColor", Color.DodgerBlue);
+            Color env = GetColorSetting("spectrumAnalyzer.envelopeColor", Color.White, 255);
+            Color peak = GetColorSetting("spectrumAnalyzer.peakColor", Color.Yellow, 255);
+            Color fill = GetColorSetting("spectrumAnalyzer.fillColor", Color.DodgerBlue, 100);
 
             string newKey = string.Join("|", hasThemes, isDark, name, Valid(fore, Color.Empty).ToArgb(), Valid(back, Color.Empty).ToArgb(),
                                         Valid(panel, Color.Empty).ToArgb(), style, env.ToArgb(), peak.ToArgb(), fill.ToArgb(),
