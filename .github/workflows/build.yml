@@ -168,7 +168,20 @@ jobs:
         - name: Download SDR#
           run: |
             Invoke-WebRequest -Uri "https://airspy.com/downloads/sdrsharp-x64.zip" -OutFile sdrsharp.zip -UserAgent "Mozilla/5.0"
+            "Downloaded $((Get-Item sdrsharp.zip).Length) bytes"
             Expand-Archive sdrsharp.zip -DestinationPath sdrsharp_dist
+            Get-ChildItem sdrsharp_dist -Recurse -File | Sort-Object Length -Descending | Select-Object -First 40 | Format-Table Length, FullName -AutoSize | Out-String -Width 300
+
+        # Newer SDR# builds may be published as a single-file bundle, with the assemblies inside the exe
+        - name: Extract SDR# bundle (if needed)
+          run: |
+            if (-not (Get-ChildItem sdrsharp_dist -Recurse -Filter SDRSharp.Common.dll)) {
+                $exe = Get-ChildItem sdrsharp_dist -Recurse -Filter SDRSharp.exe | Select-Object -First 1
+                if (-not $exe) { throw "Neither SDRSharp.Common.dll nor SDRSharp.exe found in the SDR# download" }
+                dotnet tool install -g sfextract
+                sfextract $exe.FullName -o "$($exe.DirectoryName)"
+                Get-ChildItem $exe.DirectoryName -Filter "SDRSharp*" | Format-Table Length, Name -AutoSize
+            }
 
         # The plugin must target the same .NET version as SDR#
         - name: Find SDR# version
@@ -178,8 +191,17 @@ jobs:
             if (-not $common) { throw "SDRSharp.Common.dll not found in the SDR# download" }
             $dir = $common.DirectoryName
             $rc = Get-ChildItem $dir -Filter "SDRSharp*.runtimeconfig.json" | Select-Object -First 1
-            if (-not $rc) { throw "No runtimeconfig.json next to SDR#: is it a .NET (not .NET Framework) build?" }
-            $tfm = (Get-Content $rc.FullName | ConvertFrom-Json).runtimeOptions.tfm -replace '-windows.*', ''
+            if ($rc) {
+                $tfm = (Get-Content $rc.FullName | ConvertFrom-Json).runtimeOptions.tfm -replace '-windows.*', ''
+            }
+            else {
+                # No runtimeconfig (e.g. single-file bundle): read the target framework from SDRSharp.Common.dll
+                $bytes = [IO.File]::ReadAllBytes($common.FullName)
+                $text = [Text.Encoding]::ASCII.GetString($bytes)
+                $m = [regex]::Match($text, '\.NETCoreApp,Version=v(\d+\.\d+)')
+                if (-not $m.Success) { throw "Can't tell which .NET version SDR# uses" }
+                $tfm = "net$($m.Groups[1].Value)"
+            }
             $exe = Get-ChildItem $dir -Filter "SDRSharp*.exe" | Select-Object -First 1
             $ver = if ($exe) { $exe.VersionInfo.FileVersion } else { "unknown" }
             "SDR# $ver ($tfm) in $dir"

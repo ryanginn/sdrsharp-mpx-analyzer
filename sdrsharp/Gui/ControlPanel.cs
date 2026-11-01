@@ -20,6 +20,8 @@ namespace SDRSharp.MPXAnalyzer.Gui
         readonly NumericUpDown dbMinUpDown;
         readonly CheckBox peakHoldCheck;
         readonly ComboBox unitsCombo;
+        readonly ComboBox responseCombo;
+        readonly NumericUpDown limitUpDown;
         readonly TextBox folderBox;
         readonly Button folderButton;
         readonly ComboBox typeCombo;
@@ -96,6 +98,27 @@ namespace SDRSharp.MPXAnalyzer.Gui
                 plugin.SaveSettings();
             };
             AddRow("Level units", unitsCombo, "Deviation, pilot and RDS levels in kHz or percent");
+
+            responseCombo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
+            responseCombo.Items.AddRange(new object[] { "Instant", "125 \u00B5s (Europe)", "1 ms (US)" });
+            responseCombo.SelectedIndex = Math.Max(Array.IndexOf(MpxSettings.PEAK_RESPONSES_US, s.PeakResponseUs), 0);
+            responseCombo.SelectedIndexChanged += (o, e) =>
+            {
+                s.PeakResponseUs = MpxSettings.PEAK_RESPONSES_US[responseCombo.SelectedIndex];
+                plugin.Chain.SetPeakResponse(s.PeakResponseUs * 1e-6);
+                plugin.SaveSettings();
+            };
+            AddRow("Peak response", responseCombo, "Response time of the deviation peak meter. Instant is the true sample peak;\n" +
+                                                  "with 125 \u00B5s or 1 ms, peaks shorter than that read lower");
+
+            limitUpDown = new NumericUpDown { Minimum = -6, Maximum = 12, DecimalPlaces = 1, Increment = 0.5m, Dock = DockStyle.Fill };
+            limitUpDown.Value = Math.Clamp((decimal)s.MpxPowerLimitDBr, limitUpDown.Minimum, limitUpDown.Maximum);
+            limitUpDown.ValueChanged += (o, e) =>
+            {
+                s.MpxPowerLimitDBr = (float)limitUpDown.Value;
+                plugin.SaveSettings();
+            };
+            AddRow("MPX limit (dBr)", limitUpDown, "MPX power turns amber above this (0 dBr in most countries, some allow +3 or +6 dBr)");
 
             // Recording
             var folderPanel = new TableLayoutPanel { ColumnCount = 2, Dock = DockStyle.Fill, AutoSize = true, Margin = new Padding(0) };

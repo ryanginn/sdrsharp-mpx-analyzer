@@ -217,6 +217,46 @@ static class Program
             Check("RDS kHz", m.RdsKHz, 3.0 * 1.51 / 1.444, 0.2);
         }
 
+        // Deviation peak response time: steady tones read their full peak, short peaks read lower
+        {
+            Console.WriteLine("Peak response time");
+            foreach (var (resp, tol) in new[] { (0.0, 0.002), (125e-6, 0.01), (1e-3, 0.015) })
+            {
+                var chain = new MpxChain();
+                chain.SetPeakResponse(resp);
+                var sig = new float[19200];
+                for (int k = 0; k < 20; k++)
+                {
+                    for (int i = 0; i < sig.Length; i++) { sig[i] = 0.5f * (float)Math.Sin(2.0 * Math.PI * 1000.0 * (k * sig.Length + i) / 192000.0); }
+                    chain.ProcessMpx(sig, sig.Length);
+                }
+                chain.GetMeasurements(out var m);
+                Check($"1k 50% tone, {resp * 1e6:0} us", m.PeakDevKHz, 37.5, 37.5 * tol);
+                Check($"  response reported, {resp * 1e6:0} us", m.PeakResponseSec * 1e6, resp * 1e6, 0.01);
+            }
+
+            // 30% tone with a single 50us spike to 100% (repeated short peaks build up, like on any quasi-peak meter)
+            var readings = new List<double>();
+            foreach (double resp in new[] { 0.0, 125e-6, 1e-3 })
+            {
+                var chain = new MpxChain();
+                chain.SetPeakResponse(resp);
+                var sig = new float[19200];
+                for (int k = 0; k < 20; k++)
+                {
+                    for (int i = 0; i < sig.Length; i++) { sig[i] = 0.3f * (float)Math.Sin(2.0 * Math.PI * 1000.0 * (k * sig.Length + i) / 192000.0); }
+                    if (k == 10) { for (int i = 5000; i < 5000 + 10; i++) { sig[i] = 1.0f; } }
+                    chain.ProcessMpx(sig, sig.Length);
+                }
+                chain.GetMeasurements(out var m);
+                readings.Add(m.MaxDevKHz);
+            }
+            Check("50us spike, instant", readings[0], 75.0, 0.5);
+            // Detector at 0.3 (tone peak) charges toward 1.0 for 50us: 0.3 + 0.7 * (1 - exp(-50/T))
+            Check("50us spike, 125 us", readings[1], 75.0 * (0.3 + 0.7 * (1 - Math.Exp(-52.0 / 125.0))), 1.5);
+            Check("50us spike, 1 ms", readings[2], 75.0 * (0.3 + 0.7 * (1 - Math.Exp(-52.0 / 1000.0))), 1.5);
+        }
+
         // Recording
         {
             Console.WriteLine("Recording");

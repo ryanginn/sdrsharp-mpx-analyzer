@@ -130,6 +130,7 @@ namespace SDRSharp.MPXAnalyzer.Gui
             spectrum.UpdateData(chain, msg);
 
             meters.LevelPercent = s.LevelPercent;
+            meters.PowerLimitDBr = s.MpxPowerLimitDBr;
             meters.UpdateData(chain, msg == null);
         }
 

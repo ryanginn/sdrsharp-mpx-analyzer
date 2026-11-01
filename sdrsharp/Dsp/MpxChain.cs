@@ -11,6 +11,7 @@ namespace SDRSharp.MPXAnalyzer.Dsp
         public float PowerSeconds;      // Seconds integrated in PowerDBr (up to 60)
         public float PeakDevKHz;        // Peak deviation over the last 1s
         public float MaxDevKHz;         // Peak deviation since reset
+        public float PeakResponseSec;   // Peak detector response time used for the deviation (0 = instant)
         public float PilotKHz;          // 19kHz pilot level (deviation) over the last 1s
         public bool PilotPresent;
         public float RdsKHz;            // RDS level (peak deviation, from noise corrected RMS) over the last 1s
@@ -86,6 +87,10 @@ namespace SDRSharp.MPXAnalyzer.Dsp
         const int LOCK_MIN_BLOCKS = 10;         // Don't report before 1s of data
         public const double LOCK_MIN_COHERENCE = 0.9;
 
+        // Deviation peak detector release, when a response time is set. Long compared to audio periods, so a
+        // steady tone reads its full peak; short peaks read lower the shorter they are than the response time
+        const double PEAK_RELEASE_SEC = 1.0;
+
         // ---- Demodulator and resampler (DSP thread) ----
         MpxResampler resampler;
         double iqRate;
@@ -129,7 +134,14 @@ namespace SDRSharp.MPXAnalyzer.Dsp
         readonly float[] peakRing = new float[PEAK_BLOCKS];
         int peakPos, peakFill;
         float maxPeak;
-        int measReset;
+        int measReset = 1;      // Also initialises the peak detector on the first block
+
+        // Deviation peak detector (quasi-peak, DSP thread). attack = 0 means instant (sample peak)
+        double peakResponse;        // Requested by the GUI, seconds
+        double peakResponseUsed = -1.0;
+        float peakAttack;
+        float peakRelease;
+        float peakDet;
 
         // Pilot and RDS level (DSP thread)
         readonly float[] pilotCos = new float[TONE_TABLE];
@@ -306,6 +318,16 @@ namespace SDRSharp.MPXAnalyzer.Dsp
 
         // ---- Measurements ----
 
+        // Response time of the deviation peak detector: 0 = instant (true sample peak), otherwise a peak shorter
+        // than this reads lower (e.g. 125us in Europe, 1ms in the US). Restarts the measurements
+        public void SetPeakResponse(double seconds)
+        {
+            Interlocked.Exchange(ref peakResponse, Math.Max(seconds, 0.0));
+            Interlocked.Exchange(ref measReset, 1);
+        }
+
+        public double PeakResponse => Interlocked.CompareExchange(ref peakResponse, 0.0, 0.0);
+
         // Restart the MPX power integration and peak deviation hold (e.g. after retuning)
         public void ResetMeasurements() => Interlocked.Exchange(ref measReset, 1);
 
@@ -436,6 +458,10 @@ namespace SDRSharp.MPXAnalyzer.Dsp
                 lockVec = Complex.Zero;
                 lockWeight = 0.0;
                 lockPos = lockFill = 0;
+                peakDet = 0.0f;
+                peakResponseUsed = PeakResponse;
+                peakAttack = (peakResponseUsed > 0.0) ? (float)(1.0 - Math.Exp(-1.0 / (peakResponseUsed * SAMPLERATE))) : 0.0f;
+                peakRelease = (float)Math.Exp(-1.0 / (PEAK_RELEASE_SEC * SAMPLERATE));
                 lock (measLock) { measValid = false; }
             }
 
@@ -446,7 +472,16 @@ namespace SDRSharp.MPXAnalyzer.Dsp
                 dcEst += DC_ALPHA * (data[i] - dcEst);
                 float x = data[i] - dcEst;
                 blkSumSq += x * x;
-                blkPeak = Math.Max(blkPeak, Math.Abs(x));
+
+                // Deviation peak: the sample peak, or a quasi-peak detector with the chosen response time
+                // (first order attack with that time constant, slow release)
+                float ax = Math.Abs(x);
+                if (peakAttack > 0.0f)
+                {
+                    peakDet = (ax > peakDet) ? peakDet + peakAttack * (ax - peakDet) : peakDet * peakRelease;
+                    ax = peakDet;
+                }
+                blkPeak = Math.Max(blkPeak, ax);
 
                 // Pilot: correlate with 19kHz over a windowed block
                 float wx = pilotWin[pilotCount] * x;
@@ -637,6 +672,7 @@ namespace SDRSharp.MPXAnalyzer.Dsp
             meas.PowerSeconds = (float)(powerFill * METER_BLOCK / SAMPLERATE);
             meas.PeakDevKHz = (float)(recentPeak * khz);
             meas.MaxDevKHz = (float)(maxPeak * khz);
+            meas.PeakResponseSec = (float)Math.Max(peakResponseUsed, 0.0);
             meas.PilotKHz = (float)(pilotSum / peakFill * khz);
             meas.PilotPresent = meas.PilotKHz >= PILOT_MIN_KHZ;
 

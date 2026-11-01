@@ -85,6 +85,7 @@ namespace SDRSharp.MPXAnalyzer
             settings = MpxSettings.Load();
             chain = new MpxChain();
             chain.SetAveraging(settings.AvgFrames);
+            chain.SetPeakResponse(settings.PeakResponseUs * 1e-6);
             chain.SetAnalysis(false);   // Until the window is shown
             hook = new MpxIQHook(chain);
             control.RegisterStreamHook(hook, ProcessorType.DecimatedAndFilteredIQ);
