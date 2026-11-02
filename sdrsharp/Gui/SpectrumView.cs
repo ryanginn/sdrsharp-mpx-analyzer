@@ -41,8 +41,10 @@ namespace SDRSharp.MPXAnalyzer.Gui
 
         protected override void OnMouseMove(MouseEventArgs e)
         {
+            // No Invalidate() here: the GUI timer redraws the plot ~30 times a second anyway, and repainting on every
+            // mouse move floods the message queue so the timer (lowest priority message) never runs and the display
+            // freezes while the mouse moves
             mouse = e.Location;
-            Invalidate();
             base.OnMouseMove(e);
         }
 
