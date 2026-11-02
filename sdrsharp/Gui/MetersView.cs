@@ -32,10 +32,16 @@ namespace SDRSharp.MPXAnalyzer.Gui
         {
             get
             {
+                // Widest content: the big values, the labels, and label + value rows (with a small gap)
                 using var g = CreateGraphics();
-                float w = Math.Max(g.MeasureString("-00.0 dBr", valueFont).Width, g.MeasureString("Deviation (1 s peak)", Font).Width);
-                w = Math.Max(w, g.MeasureString("RDS lock    Yes +00°", Font).Width);
-                return (int)Math.Ceiling(w) + 12;
+                float W(string s, Font f) => g.MeasureString(s, f).Width;
+                float gap = W("  ", Font);
+                float w = Math.Max(W("+00.0 dBr", valueFont), W("000.0 kHz", valueFont));
+                foreach (var s in new[] { "MPX power (60 s)", "Deviation (125 µs)" }) { w = Math.Max(w, W(s, Font)); }
+                string[] rowLabels = { "1 s", "Max", "Pilot", "RDS lock" };
+                string[] rowValues = { "+00.0 dBr", "000.0 kHz", "00.00 kHz", "Yes +00°" };
+                for (int i = 0; i < rowLabels.Length; i++) { w = Math.Max(w, W(rowLabels[i], Font) + gap + W(rowValues[i], Font)); }
+                return (int)Math.Ceiling(w) + 8;
             }
         }
 
@@ -99,7 +105,7 @@ namespace SDRSharp.MPXAnalyzer.Gui
             string noLevel = LevelPercent ? "--.- %" : "--.- kHz";
             float resp = valid ? meas.PeakResponseSec : 0.0f;
             float devY = y;
-            Label(resp <= 0.0f ? "Deviation (1 s peak)" : resp < 1e-3f ? string.Format("Deviation ({0:0} µs)", resp * 1e6f) : string.Format("Deviation ({0:0.#} ms)", resp * 1e3f));
+            Label(resp <= 0.0f ? "Deviation (peak)" : resp < 1e-3f ? string.Format("Deviation ({0:0} µs)", resp * 1e6f) : string.Format("Deviation ({0:0.#} ms)", resp * 1e3f));
             tips.Add(new KeyValuePair<RectangleF, string>(new RectangleF(x, devY, w, lineH + valueH), resp <= 0.0f
                 ? "Peak deviation over the last second (true sample peak)"
                 : string.Format("Peak deviation over the last second, quasi-peak with {0:0} µs response time:\npeaks shorter than that read lower", resp * 1e6f)));

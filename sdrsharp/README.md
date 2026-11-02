@@ -104,7 +104,7 @@ If SDR# is updated to a new .NET version, rebuild the plugin (or download a newe
    - **Peak hold** (with *Clear*) and **Reset** at the bottom
 
    Frequency and filter aren't repeated there, since SDR# shows them.
-5. Hover over the spectrum to read frequency and level. Enable **Peak hold** to catch transients.
+5. Hover over the spectrum to read frequency and level. Enable **Peak hold** to catch transients; right-clicking the spectrum toggles it.
 6. Choose a folder and sample type in the MPX Analyzer panel, then press **Record MPX**, or use the **red record button** above the readings. It turns into a square stop button while recording, with the elapsed time beside it.
 
 ### Panel options
