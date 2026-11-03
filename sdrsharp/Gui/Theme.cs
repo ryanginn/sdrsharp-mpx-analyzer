@@ -57,7 +57,7 @@ namespace SDRSharp.MPXAnalyzer.Gui
         static Type RadioUtils => Type.GetType("SDRSharp.Radio.Utils, SDRSharp.Radio", false);
 
         // SDR# setting as text (SDRSharp.config / SDRSharp.exe.config), or null
-        static string GetSetting(string name)
+        internal static string GetSetting(string name)
         {
             try
             {

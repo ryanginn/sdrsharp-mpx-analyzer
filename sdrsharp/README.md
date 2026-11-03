@@ -112,7 +112,7 @@ If SDR# is updated to a new .NET version, rebuild the plugin (or download a newe
 | Option | Description |
 |---|---|
 | Show MPX window | Older SDR# only: opens or hides the spectrum window (current SDR# has the MPX Spectrum dock panel instead) |
-| Averaging | Number of FFT frames averaged (about 94 frames/s) |
+| Averaging | Spectrum smoothing, like SDR#'s own spectra: rising levels follow quickly, falling levels settle over this many FFT frames (about 94 per second). Default 5 |
 | Max freq | Upper edge of the display (20–96 kHz) |
 | dB max / dB min | Vertical scale |
 | Peak hold | Overlay the maximum level seen since the last reset |

@@ -13,7 +13,8 @@ namespace SDRSharp.MPXAnalyzer
     public sealed class MpxSettings
     {
         public bool ShowWindow { get; set; } = true;
-        public int AvgFrames { get; set; } = 10;
+        public int AvgFrames { get; set; } = 5;
+        public int SettingsVersion { get; set; }        // For migrating defaults that changed
         public float MaxFreqKHz { get; set; } = 96.0f;
         public float DbMin { get; set; } = -100.0f;
         public float DbMax { get; set; } = 0.0f;
@@ -53,7 +54,7 @@ namespace SDRSharp.MPXAnalyzer
                 }
                 catch { }
             }
-            return new MpxSettings();
+            return new MpxSettings { SettingsVersion = 2 };
         }
 
         public void Save()
@@ -161,6 +162,10 @@ namespace SDRSharp.MPXAnalyzer
 
         MpxSettings Validated()
         {
+            // Version 2: averaging became attack/decay with a faster default (5 instead of 10). Keep a user's own
+            // choice, but move the old default along
+            if (SettingsVersion < 2 && AvgFrames == 10) { AvgFrames = 5; }
+            SettingsVersion = 2;
             AvgFrames = MathUtil.Clamp(AvgFrames, 1, 100);
             MaxFreqKHz = MathUtil.Clamp(MaxFreqKHz, 20.0f, (float)(MpxChain.SAMPLERATE / 2000.0));
             DbMax = MathUtil.Clamp(DbMax, -60.0f, 20.0f);

@@ -118,7 +118,8 @@ namespace SDRSharp.MPXAnalyzer.Dsp
         readonly float[] peakSpec = new float[FFT_BINS];
         int framePos;
         bool firstFrame = true;
-        volatile float avgAlpha = 0.1f;
+        volatile float avgAlpha = 0.2f;        // Decay
+        volatile float avgAttack = 0.6f;       // Attack (faster, like SDR#'s spectra)
         int peakReset;
         int spectrumReset;
         volatile bool analysisOn = true;
@@ -286,7 +287,14 @@ namespace SDRSharp.MPXAnalyzer.Dsp
         // ---- Spectrum ----
 
         // Exponential averaging over roughly `frames` FFT frames (1 = no averaging)
-        public void SetAveraging(int frames) => avgAlpha = 1.0f / Math.Max(frames, 1);
+        // Like SDR#'s spectrum display: rising levels follow quickly (attack), falling ones settle over roughly
+        // `frames` FFT frames (decay). 1 = no averaging
+        public void SetAveraging(int frames)
+        {
+            float decay = 1.0f / Math.Max(frames, 1);
+            avgAlpha = decay;
+            avgAttack = Math.Min(1.0f, 3.0f * decay);
+        }
 
         public void ResetPeak() => Interlocked.Exchange(ref peakReset, 1);
 
@@ -749,12 +757,13 @@ namespace SDRSharp.MPXAnalyzer.Dsp
             }
             fft.Transform(fftRe, fftIm);
 
-            float alpha = avgAlpha;
+            float decay = avgAlpha, attack = avgAttack;
             bool resetPk = Interlocked.Exchange(ref peakReset, 0) != 0;
             for (int i = 0; i < FFT_BINS; i++)
             {
                 float p = (float)(fftRe[i] * fftRe[i] + fftIm[i] * fftIm[i]);
-                avgSpec[i] = firstFrame ? p : avgSpec[i] + alpha * (p - avgSpec[i]);
+                float a = (p > avgSpec[i]) ? attack : decay;
+                avgSpec[i] = firstFrame ? p : avgSpec[i] + a * (p - avgSpec[i]);
                 peakSpec[i] = (firstFrame || resetPk) ? p : Math.Max(peakSpec[i], p);
             }
             firstFrame = false;

@@ -61,7 +61,7 @@ namespace SDRSharp.MPXAnalyzer.Gui
             warnLabel = new Label { AutoSize = true, Dock = DockStyle.Fill, ForeColor = Color.DarkOrange, Visible = false };
             AddWide(warnLabel);
 
-            avgUpDown = AddNumber("Averaging", 1, 100, s.AvgFrames, "FFT frames averaged (about 94 frames/s)");
+            avgUpDown = AddNumber("Averaging", 1, 100, s.AvgFrames, "Spectrum smoothing: how many FFT frames (about 94 per second) falling levels take to settle. Rising levels follow faster, like SDR#'s own spectra");
             avgUpDown.ValueChanged += (o, e) =>
             {
                 if (updating) { return; }
