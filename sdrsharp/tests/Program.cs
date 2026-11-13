@@ -31,6 +31,7 @@ static class Program
         public double RdsPct;               // Peak of the theoretical EN 50067 waveform, % of 75kHz
         public double RdsPhaseDeg;          // RDS carrier vs 3rd pilot harmonic
         public double RdsOffsetHz;          // RDS carrier frequency error (unlocked)
+        public double PilotOffsetHz;        // Pilot frequency error (RDS stays locked to it)
         public double NoiseRms;             // IQ noise relative to a carrier amplitude of 1
     }
 
@@ -94,7 +95,7 @@ static class Program
         var step = new double[length];
         double sumSq = 0.0, peak = 0.0;
         double CosAvg(double w, double ph, int i) => (Math.Sin(w * i + ph) - Math.Sin(w * (i - 1) + ph)) / w;
-        double pw = 2.0 * Math.PI * 19000.0 / fs;
+        double pw = 2.0 * Math.PI * (19000.0 + sig.PilotOffsetHz) / fs;
         double rdsPh = sig.RdsPhaseDeg * Math.PI / 180.0;
         double rw = 3.0 * pw + 2.0 * Math.PI * sig.RdsOffsetHz / fs;
         for (int i = 0; i < length; i++)
@@ -161,6 +162,7 @@ static class Program
             var chain = Run(sig, fs, 4.0, out double dbr, out double peakPct);
             chain.GetMeasurements(out var m);
             Check("pilot kHz", m.PilotKHz, 6.75, 0.03);
+            Check("pilot Hz", m.PilotFreqHz, 19000.0, 0.01);
             // Sample peaks at 192k and at the IQ rate differ slightly for a complex signal
             Check("deviation peak %", m.PeakDevKHz / 0.75, peakPct, 1.5);
             Check("MPX power dBr", m.PowerDBr, dbr, 0.05);
@@ -192,6 +194,16 @@ static class Program
             // Power summed over the window's main lobe, so it doesn't depend on where the tone falls between bins
             Check("57k vs 19k spectrum dB", Level(57000) - Level(19000), 0.0, 0.05);
 
+            // Off-frequency pilots
+            foreach (double off in new[] { 5.0, -120.0 })
+            {
+                sig = new Signal { PilotPct = 9.0, RdsPct = 4.0, PilotOffsetHz = off };
+                sig.Tones.Add((1000.0, 40.0));
+                chain = Run(sig, fs, 1.5, out _, out _);
+                chain.GetMeasurements(out m);
+                Check($"pilot Hz, {off:+0;-0} Hz off", m.PilotFreqHz, 19000.0 + off, 0.01);
+            }
+
             // Unlocked RDS, mono (no pilot): RDS lock n/a
             sig = new Signal { PilotPct = 9.0, RdsPct = 4.0, RdsOffsetHz = 0.5 };
             chain = Run(sig, fs, 6.0, out _, out _);
@@ -214,6 +226,7 @@ static class Program
             var chain = Run(sig, 312500.0, 4.0, out _, out _);
             chain.GetMeasurements(out var m);
             Check("pilot kHz", m.PilotKHz, 6.75, 0.08);
+            Check("pilot Hz", m.PilotFreqHz, 19000.0, 0.05);
             Check("RDS kHz", m.RdsKHz, 3.0 * 1.51 / 1.444, 0.2);
         }
 

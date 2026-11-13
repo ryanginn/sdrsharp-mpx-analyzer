@@ -14,6 +14,7 @@ namespace SDRSharp.MPXAnalyzer.Dsp
         public float PeakResponseSec;   // Peak detector response time used for the deviation (0 = instant)
         public float PilotKHz;          // 19kHz pilot level (deviation) over the last 1s
         public bool PilotPresent;
+        public float PilotFreqHz;       // Pilot frequency over the last 1s (valid when PilotPresent)
         public float RdsKHz;            // RDS level (peak deviation, from noise corrected RMS) over the last 1s
         public bool RdsPresent;
         public bool LockValid;          // Pilot and RDS both present and enough data for the lock measurement
@@ -86,6 +87,11 @@ namespace SDRSharp.MPXAnalyzer.Dsp
         const int LOCK_BLOCKS = 50;             // 5s
         const int LOCK_MIN_BLOCKS = 10;         // Don't report before 1s of data
         public const double LOCK_MIN_COHERENCE = 0.9;
+
+        // Pilot frequency: the pilot shifted to 0Hz (the lock check's filtered 12kHz samples) rotates at the
+        // frequency error. Each sample is compared with the one 1ms earlier, giving an unambiguous range of
+        // +/-500Hz, and the products are averaged over 1s
+        const int FREQ_LAG = 12;
 
         // Deviation peak detector release, when a response time is set. Long compared to audio periods, so a
         // steady tone reads its full peak; short peaks read lower the shorter they are than the response time
@@ -181,6 +187,12 @@ namespace SDRSharp.MPXAnalyzer.Dsp
         int lockPos, lockFill;
         readonly double[] rdsDcRing = new double[PEAK_BLOCKS];
         readonly double[] rdsTotRing = new double[PEAK_BLOCKS];
+
+        // Pilot frequency (DSP thread)
+        readonly Complex[] freqDelay = new Complex[FREQ_LAG];
+        int freqDelayPos, freqDelayFill;
+        Complex freqVec;
+        readonly Complex[] freqRing = new Complex[PEAK_BLOCKS];
 
         // ---- Shared with the GUI ----
         readonly object measLock = new object();
@@ -458,6 +470,8 @@ namespace SDRSharp.MPXAnalyzer.Dsp
                 lockVec = Complex.Zero;
                 lockWeight = 0.0;
                 lockPos = lockFill = 0;
+                freqDelayPos = freqDelayFill = 0;
+                freqVec = Complex.Zero;
                 peakDet = 0.0f;
                 peakResponseUsed = PeakResponse;
                 peakAttack = (peakResponseUsed > 0.0) ? (float)(1.0 - Math.Exp(-1.0 / (peakResponseUsed * SAMPLERATE))) : 0.0f;
@@ -569,7 +583,14 @@ namespace SDRSharp.MPXAnalyzer.Dsp
                     // Squaring removes the BPSK data, leaving twice the 57kHz carrier phase
                     var zc = new Complex(zr, zi);
                     lockRdsSqSum += zc * zc;
-                    lockPilotSum += new Complex(lockPilotBaseRe[i], lockPilotBaseIm[i]);
+                    var zp = new Complex(lockPilotBaseRe[i], lockPilotBaseIm[i]);
+                    lockPilotSum += zp;
+
+                    // Pilot rotation over FREQ_LAG samples
+                    if (freqDelayFill == FREQ_LAG) { freqVec += zp * Complex.Conjugate(freqDelay[freqDelayPos]); }
+                    else { freqDelayFill++; }
+                    freqDelay[freqDelayPos] = zp;
+                    freqDelayPos = (freqDelayPos + 1) % FREQ_LAG;
 
                     // Power close to 57kHz (10ms means) vs total power, to tell RDS from noise
                     rdsSubSumRe += zr;
@@ -617,6 +638,8 @@ namespace SDRSharp.MPXAnalyzer.Dsp
             double blkLockWeight = lockWeight;
             lockVec = Complex.Zero;
             lockWeight = 0.0;
+            Complex blkFreqVec = freqVec;
+            freqVec = Complex.Zero;
             double rdsDc = rdsSubBlocks > 0 ? rdsDcPow / rdsSubBlocks : 0.0;
             double rdsTot = rdsSubBlocks > 0 ? rdsTotPow / rdsSubBlocks : 0.0;
             rdsDcPow = rdsTotPow = 0.0;
@@ -637,6 +660,7 @@ namespace SDRSharp.MPXAnalyzer.Dsp
             pilotRing[peakPos] = pilotAmp;
             rdsDcRing[peakPos] = rdsDc;
             rdsTotRing[peakPos] = rdsTot;
+            freqRing[peakPos] = blkFreqVec;
             peakPos = (peakPos + 1) % PEAK_BLOCKS;
 
             lockVecRing[lockPos] = blkLockVec;
@@ -657,12 +681,14 @@ namespace SDRSharp.MPXAnalyzer.Dsp
             }
             float recentPeak = 0.0f;
             double pilotSum = 0.0, rdsDcSum = 0.0, rdsTotSum = 0.0;
+            Complex freqSum = Complex.Zero;
             for (int k = 0; k < peakFill; k++)
             {
                 recentPeak = Math.Max(recentPeak, peakRing[k]);
                 pilotSum += pilotRing[k];
                 rdsDcSum += rdsDcRing[k];
                 rdsTotSum += rdsTotRing[k];
+                freqSum += freqRing[k];
             }
 
             const double khz = DEVIATION / 1000.0;
@@ -675,6 +701,7 @@ namespace SDRSharp.MPXAnalyzer.Dsp
             meas.PeakResponseSec = (float)Math.Max(peakResponseUsed, 0.0);
             meas.PilotKHz = (float)(pilotSum / peakFill * khz);
             meas.PilotPresent = meas.PilotKHz >= PILOT_MIN_KHZ;
+            meas.PilotFreqHz = (float)(PILOT_FREQ + freqSum.Phase * (SAMPLERATE / RDS_DECIM) / (2.0 * Math.PI * FREQ_LAG));
 
             // RDS: split the band power into signal and noise using how much of each falls close to 57kHz:
             //   total = signal + noise,  dc = rdsSignalDcFraction * signal + rdsNoiseDcFraction * noise
