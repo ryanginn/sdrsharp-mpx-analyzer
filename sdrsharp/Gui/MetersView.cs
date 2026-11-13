@@ -45,7 +45,7 @@ namespace SDRSharp.MPXAnalyzer.Gui
                 float w = Math.Max(W("+00.0 dBr", valueFont), W("000.0 kHz", valueFont));
                 foreach (var s in new[] { "MPX power (60 s)", "Deviation (125 µs)" }) { w = Math.Max(w, W(s, Font)); }
                 string[] rowLabels = { "1 s", "Max", "Pilot", "RDS lock", "Pilot freq" };
-                string[] rowValues = { "+00.0 dBr", "000.0 kHz", "00.00 kHz", "Yes +00°", "00.000 kHz" };
+                string[] rowValues = { "+00.0 dBr", "000.0 kHz", "00.00 kHz", "Yes +00°", "00.0000 kHz" };
                 for (int i = 0; i < rowLabels.Length; i++) { w = Math.Max(w, W(rowLabels[i], Font) + gap + W(rowValues[i], Font)); }
                 return (int)Math.Ceiling(w) + 8;
             }
@@ -176,7 +176,7 @@ namespace SDRSharp.MPXAnalyzer.Gui
                                            "ITU-R BS.450: 19 kHz ±{2:0} Hz. Red beyond ±{3:0} Hz\n" +
                                            "Relative to the SDR's clock: correct its ppm error for an exact reading",
                                            meas.PilotFreqHz, err, PILOT_WARN_HZ, PILOT_BAD_HZ);
-                Row("Pilot freq", string.Format("{0:0.000} kHz", meas.PilotFreqHz / 1000.0f),
+                Row("Pilot freq", string.Format("{0:0.0000} kHz", meas.PilotFreqHz / 1000.0f),
                     absErr > PILOT_BAD_HZ ? Theme.Over : absErr > PILOT_WARN_HZ ? Theme.Warn : Theme.Good, tip);
             }
             else
