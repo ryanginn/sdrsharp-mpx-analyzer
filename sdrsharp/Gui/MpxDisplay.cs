@@ -25,6 +25,7 @@ namespace SDRSharp.MPXAnalyzer.Gui
         readonly TableLayoutPanel recRow;
         readonly TableLayoutPanel peakRow;
         bool updating;
+        string recordTip;
 
         internal MpxDisplay(MpxCore core)
         {
@@ -59,6 +60,7 @@ namespace SDRSharp.MPXAnalyzer.Gui
             recordButton = new Button { Size = new Size(24, 24), Anchor = AnchorStyles.Right, Margin = new Padding(2) };
             recordButton.Paint += PaintRecordButton;
             recordButton.Click += (o, e) => core.ToggleRecording(FindForm());
+            SetRecordTip("Record MPX");
             recRow.Controls.Add(recTimeLabel, 0, 0);
             recRow.Controls.Add(recordButton, 1, 0);
 
@@ -129,6 +131,22 @@ namespace SDRSharp.MPXAnalyzer.Gui
             }
         }
 
+        // Only when the text changes: SetToolTip() on every timer tick makes WinForms re-show the tip, and it can
+        // get stuck on screen (tooltips are topmost windows, so it then stays above every other window)
+        void SetRecordTip(string tip)
+        {
+            if (tip == recordTip) { return; }
+            recordTip = tip;
+            toolTip.SetToolTip(recordButton, tip);
+        }
+
+        // A tip that's up when the display is hidden (SDR# panel switched, window closed) would be left behind
+        protected override void OnVisibleChanged(EventArgs e)
+        {
+            if (!Visible) { toolTip.Hide(recordButton); }
+            base.OnVisibleChanged(e);
+        }
+
         // Called by the GUI timer while visible
         internal void UpdateView()
         {
@@ -143,7 +161,7 @@ namespace SDRSharp.MPXAnalyzer.Gui
 
             bool recording = chain.IsRecording;
             recTimeLabel.Text = recording ? "REC " + ControlPanel.FormatTime(chain.RecordedSamples) : "";
-            toolTip.SetToolTip(recordButton, recording ? "Stop recording" : "Record MPX");
+            SetRecordTip(recording ? "Stop recording" : "Record MPX");
             recordButton.Invalidate();
 
             // Why there's nothing to show

@@ -12,6 +12,12 @@ namespace SDRSharp.MPXAnalyzer.Gui
         const float VALUE_FONT_SCALE = 1.4f;
         const float MAX_DEV_KHZ = (float)(MpxChain.DEVIATION / 1000.0);
 
+        // Pilot frequency colours. ITU-R BS.450 allows 19 kHz +/-2 Hz; amber outside that, red when far enough
+        // off that stereo decoders may not lock. The measurement is relative to the SDR's sample clock, so a
+        // receiver without ppm correction can read a few Hz off on its own (1 ppm = 0.019 Hz)
+        const float PILOT_WARN_HZ = 2.0f;
+        const float PILOT_BAD_HZ = 20.0f;
+
         readonly Font valueFont;
         readonly ToolTip toolTip = new ToolTip { InitialDelay = 300, ReshowDelay = 100 };
         readonly List<KeyValuePair<RectangleF, string>> tips = new List<KeyValuePair<RectangleF, string>>();
@@ -38,8 +44,8 @@ namespace SDRSharp.MPXAnalyzer.Gui
                 float gap = W("  ", Font);
                 float w = Math.Max(W("+00.0 dBr", valueFont), W("000.0 kHz", valueFont));
                 foreach (var s in new[] { "MPX power (60 s)", "Deviation (125 µs)" }) { w = Math.Max(w, W(s, Font)); }
-                string[] rowLabels = { "1 s", "Max", "Pilot", "RDS lock" };
-                string[] rowValues = { "+00.0 dBr", "000.0 kHz", "00.00 kHz", "Yes +00°" };
+                string[] rowLabels = { "1 s", "Max", "Pilot", "RDS lock", "Pilot freq" };
+                string[] rowValues = { "+00.0 dBr", "000.0 kHz", "00.00 kHz", "Yes +00°", "00.000 kHz" };
                 for (int i = 0; i < rowLabels.Length; i++) { w = Math.Max(w, W(rowLabels[i], Font) + gap + W(rowValues[i], Font)); }
                 return (int)Math.Ceiling(w) + 8;
             }
@@ -160,6 +166,23 @@ namespace SDRSharp.MPXAnalyzer.Gui
             {
                 Row("RDS lock", valid ? "n/a" : "--", dim);
             }
+
+            // Pilot frequency
+            if (valid && meas.PilotPresent)
+            {
+                float err = meas.PilotFreqHz - 19000.0f;
+                float absErr = Math.Abs(err);
+                string tip = string.Format("19 kHz pilot frequency: {0:0.00} Hz ({1:+0.00;-0.00;0.00} Hz)\n" +
+                                           "ITU-R BS.450: 19 kHz ±{2:0} Hz. Red beyond ±{3:0} Hz\n" +
+                                           "Relative to the SDR's clock: correct its ppm error for an exact reading",
+                                           meas.PilotFreqHz, err, PILOT_WARN_HZ, PILOT_BAD_HZ);
+                Row("Pilot freq", string.Format("{0:0.000} kHz", meas.PilotFreqHz / 1000.0f),
+                    absErr > PILOT_BAD_HZ ? Theme.Over : absErr > PILOT_WARN_HZ ? Theme.Warn : Theme.Good, tip);
+            }
+            else
+            {
+                Row("Pilot freq", "--", dim);
+            }
         }
 
         protected override void OnMouseMove(MouseEventArgs e)
@@ -182,6 +205,12 @@ namespace SDRSharp.MPXAnalyzer.Gui
             shownTip = null;
             toolTip.Hide(this);
             base.OnMouseLeave(e);
+        }
+
+        protected override void OnVisibleChanged(EventArgs e)
+        {
+            if (!Visible) { shownTip = null; toolTip.Hide(this); }
+            base.OnVisibleChanged(e);
         }
 
         protected override void Dispose(bool disposing)
