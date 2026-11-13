@@ -24,6 +24,8 @@ namespace SDRSharp.MPXAnalyzer
         public float MpxPowerLimitDBr { get; set; }         // MPX power reading turns amber above this
         public string RecPath { get; set; } = DefaultRecPath;
         public WavSampleType SampleType { get; set; } = WavSampleType.Int16;
+        public int ScopeSignal { get; set; }                // Dsp.ScopeSignal, MPX by default
+        public int ScopeTimeMs { get; set; } = 10;
         public int WindowX { get; set; } = int.MinValue;
         public int WindowY { get; set; } = int.MinValue;
         public int WindowWidth { get; set; } = 760;
@@ -33,6 +35,9 @@ namespace SDRSharp.MPXAnalyzer
 
         // Choices for the deviation peak response time: instant (sample peak), Europe, US
         public static readonly int[] PEAK_RESPONSES_US = { 0, 125, 1000 };
+
+        // Scope time base choices (the chain keeps 100ms of history)
+        public static readonly int[] SCOPE_TIMES_MS = { 1, 2, 5, 10, 20, 50, 100 };
 
         static string DefaultRecPath => Path.Combine(AppContext.BaseDirectory, "Recordings");
 
@@ -167,6 +172,8 @@ namespace SDRSharp.MPXAnalyzer
             DbMin = MathUtil.Clamp(DbMin, -160.0f, -20.0f);
             if (DbMin > DbMax - 10.0f) { DbMin = DbMax - 10.0f; }
             if (Array.IndexOf(PEAK_RESPONSES_US, PeakResponseUs) < 0) { PeakResponseUs = 125; }
+            if (!Enum.IsDefined(typeof(Dsp.ScopeSignal), ScopeSignal)) { ScopeSignal = 0; }
+            if (Array.IndexOf(SCOPE_TIMES_MS, ScopeTimeMs) < 0) { ScopeTimeMs = 10; }
             MpxPowerLimitDBr = MathUtil.Clamp(MpxPowerLimitDBr, -6.0f, 12.0f);
             if (string.IsNullOrWhiteSpace(RecPath)) { RecPath = DefaultRecPath; }
             if (!Enum.IsDefined(typeof(WavSampleType), SampleType)) { SampleType = WavSampleType.Int16; }

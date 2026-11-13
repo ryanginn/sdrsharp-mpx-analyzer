@@ -128,4 +128,58 @@ namespace SDRSharp.MPXAnalyzer
 
         internal MpxCore Core => core;
     }
+
+    // The oscilloscope (MPX or decoded L / R / L+R / L-R) with the +/- modulation and demodulated peaks, as its own
+    // dock panel like the spectrum. Old SDR# that only loads what Plugins.xml lists shows it as a side panel when
+    // it's listed there too
+#if NETCOREAPP
+    public class MpxScopePlugin : ISharpPlugin, ICanLazyLoadGui, IExtendedNameProvider, IPreferedDockPosition
+#else
+    public class MpxScopePlugin : ISharpPlugin
+#endif
+    {
+        MpxCore core;
+        ScopeDisplay gui;
+
+        public string DisplayName => "MPX Scope";
+
+        public string Category => "Analysis";
+
+        public string MenuItemName => DisplayName;
+
+        public DockStyle DockPosition => DockStyle.Bottom;
+
+        public bool IsActive => gui != null && gui.Visible;
+
+        public UserControl Gui
+        {
+            get
+            {
+                LoadGui();
+                return gui;
+            }
+        }
+
+        public void LoadGui()
+        {
+            if (gui != null) { return; }
+            gui = new ScopeDisplay(core);
+            core.AddScope(gui);
+        }
+
+        public void Initialize(ISharpControl control)
+        {
+            core = MpxCore.Acquire(control);
+        }
+
+        public void Close()
+        {
+            if (core == null) { return; }
+            if (gui != null) { core.RemoveScope(gui); }
+            MpxCore.Release();
+            core = null;
+        }
+
+        internal MpxCore Core => core;
+    }
 }

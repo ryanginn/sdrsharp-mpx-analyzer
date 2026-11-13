@@ -45,9 +45,17 @@ The demodulated signal is resampled from SDR#'s IQ rate (typically 250–500 kS/
   - **Readings:** *Yes* with the phase offset (e.g. "Yes +2°"), green when within tolerance and amber when not. *No* (amber) means the RDS encoder isn't locked to the pilot. *n/a* means there is no pilot or no RDS.
   - **How:** squaring the RDS signal removes its data and leaves the carrier phase. This is compared with 3× the pilot phase every 10 ms and averaged over 5 seconds. Hover for the exact phase and the stability figure (locked above 0.90).
   - **180° ambiguity:** RDS's data modulation hides 180° phase steps, so the offset is shown in the range −90° to +90°.
-- **CPU use:** the spectrum and measurements are only computed while the MPX Spectrum panel (or window) is on screen. Recording carries on when it's closed or hidden behind another tab. Showing it again restarts the measurements.
+- **Pilot freq:** the pilot frequency, to 0.1 Hz, averaged over 1 second. Green within ITU-R BS.450's 19 kHz ±2 Hz, amber beyond that, red beyond ±20 Hz. The reading depends on the SDR's sample clock: correct its ppm error in SDR# for an exact value (1 ppm = 0.019 Hz).
+- **CPU use:** the spectrum, scope and measurements are only computed while the MPX Spectrum or MPX Scope panel (or window) is on screen. Recording carries on when it's closed or hidden behind another tab. Showing it again restarts the measurements.
 - **Reset:** the measurements restart automatically when the frequency, the filter bandwidth or the IQ rate changes. *Reset* under the meters restarts them by hand.
 - **Accuracy:** a slow DC filter removes any carrier offset first, so slight mistuning doesn't affect the readings. SDR#'s IF filter does affect them; use a wide bandwidth on a clean signal for measurements.
+
+**MPX Scope** (a separate dock panel):
+- **Scope:** the MPX, or the decoded **L**, **R**, **L+R** or **L−R**, picked on the right (MPX by default), with a time base from 1 to 100 ms. The trace fades out slowly like a phosphor screen. Dashed lines mark ±100% (±75 kHz); anything beyond them is drawn red. The scale follows the *Level units* setting.
+  - **L+R and L−R** are shown as (L+R)/2 and (L−R)/2: each one's share of the deviation, on the same scale as the MPX.
+- **+ Mod / − Mod:** the positive and negative peak deviation over the last second, with the same peak response time as the Deviation meter. A composite clipper shows up as flat, nearly equal peaks; asymmetric modulation as different ones. Red above 100%.
+- **De-mod L / R:** the peaks of the decoded left and right channels over the last second, as transmitted (no de-emphasis), in deviation units. With a 9% pilot, full-scale audio reads 91% (68.25 kHz). Amber above 100% minus the pilot (all the audio can use), red above 100%. Shows "mono" when there's no pilot (L = R).
+  - **How:** a PLL locks to the pilot, and its doubled phase demodulates the 38 kHz subcarrier (ITU-R BS.450). The audio filter is flat to 15 kHz and removes the pilot by 78 dB. Separation is better than 50 dB on a clean signal.
 
 **WAV files:**
 - **Sample format:** Int16 (default) is enough for most uses and keeps files small. Int32 gives more dynamic range. Both clip at ±75 kHz deviation; choose Float32 if you need to capture over-deviating stations without clipping.
@@ -73,8 +81,9 @@ Both contain a file called `SDRSharp.MPXAnalyzer.dll`; use the one that matches 
 **Current SDR#:**
 1. Close SDR#.
 2. Copy `SDRSharp.MPXAnalyzer.dll` into SDR#'s `Plugins` folder.
-3. Start SDR#. The *Plugins* menu has two new panels, *Analysis : MPX Analyzer* and *Analysis : MPX Spectrum*. Tick one to show it, untick it to hide it:
+3. Start SDR#. The *Plugins* menu has three new panels, *Analysis : MPX Analyzer*, *Analysis : MPX Spectrum* and *Analysis : MPX Scope*. Tick one to show it, untick it to hide it:
    - **MPX Spectrum**: the spectrum and meters. It's a dock panel like SDR#'s built-in FM MPX Spectrum: drag its tab to dock it, e.g. below the waterfall next to the other spectra, tab it, float it or close it.
+   - **MPX Scope**: the oscilloscope with the + / − modulation and demodulated L / R peaks. A dock panel like the spectrum.
    - **MPX Analyzer**: the settings and recording.
 
    If a panel won't dock where you drag it, reset the window arrangement from SDR#'s *Layout* menu.
@@ -87,7 +96,11 @@ Both contain a file called `SDRSharp.MPXAnalyzer.dll`; use the one that matches 
    <add key="MPX Analyzer" value="SDRSharp.MPXAnalyzer.MpxPlugin,SDRSharp.MPXAnalyzer" />
    ```
    Even older versions without `Plugins.xml` have the same `<sharpPlugins>` section in `SDRSharp.exe.config`.
-4. Start SDR#. **MPX Analyzer** appears among the plugin panels.
+   For the scope, add this line too (it then appears as a side panel):
+   ```xml
+   <add key="MPX Scope" value="SDRSharp.MPXAnalyzer.MpxScopePlugin,SDRSharp.MPXAnalyzer" />
+   ```
+4. Start SDR#. **MPX Analyzer** (and **MPX Scope**) appear among the plugin panels.
 
 If SDR# is updated to a new .NET version, rebuild the plugin (or download a newer build).
 
@@ -160,7 +173,7 @@ The DSP code has no SDR# dependency and is tested with synthetic FM signals of e
 dotnet run -c Release --project sdrsharp/tests/MpxTests.csproj
 ```
 
-It checks the pilot, RDS (with and without noise), MPX power, deviation (including the peak response times), flatness at 57 kHz, RDS lock detection and the WAV writer. CI also runs `smoketest/` for both versions (the older one as a 32-bit .NET Framework process). It loads the plugin with SDR#'s assemblies on Windows, feeds it a signal through the IQ hook, checks the readings and saves screenshots in a dark and a light theme (artifact `sdrsharp_smoketest_screenshots`). `SmokeTest.exe <SDR# assemblies folder> <out> --api-dump` lists SDR#'s theme and colour API.
+It checks the pilot (level and frequency), RDS (with and without noise), MPX power, deviation (including the peak response times and the + / − peaks), flatness at 57 kHz, RDS lock detection, the stereo decoder (levels, separation, mono, an off-frequency pilot) and the WAV writer. CI also runs `smoketest/` for both versions (the older one as a 32-bit .NET Framework process). It loads the plugin with SDR#'s assemblies on Windows, feeds it a signal through the IQ hook, checks the readings and saves screenshots in a dark and a light theme (artifact `sdrsharp_smoketest_screenshots`). `SmokeTest.exe <SDR# assemblies folder> <out> --api-dump` lists SDR#'s theme and colour API.
 
 ## License
 

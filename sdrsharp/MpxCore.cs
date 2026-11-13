@@ -25,6 +25,7 @@ namespace SDRSharp.MPXAnalyzer
         readonly MpxIQHook hook;
         readonly MpxSettings settings;
         readonly List<MpxDisplay> displays = new List<MpxDisplay>();
+        readonly List<ScopeDisplay> scopes = new List<ScopeDisplay>();
         System.Windows.Forms.Timer timer;
         MpxWindow window;
 
@@ -107,6 +108,14 @@ namespace SDRSharp.MPXAnalyzer
 
         public void RemoveDisplay(MpxDisplay d) => displays.Remove(d);
 
+        public void AddScope(ScopeDisplay d)
+        {
+            StartGui();
+            scopes.Add(d);
+        }
+
+        public void RemoveScope(ScopeDisplay d) => scopes.Remove(d);
+
         void Tick()
         {
             Interlocked.Exchange(ref frequency, ReadFrequency());
@@ -130,6 +139,7 @@ namespace SDRSharp.MPXAnalyzer
                 if (Theme.Refresh(control))
                 {
                     foreach (var d in displays) { d.ApplyTheme(); }
+                    foreach (var d in scopes) { d.ApplyTheme(); }
                     window?.ApplyTheme();
                 }
             }
@@ -139,6 +149,14 @@ namespace SDRSharp.MPXAnalyzer
             // The spectrum and measurements are only computed while a display is on screen
             bool shown = false;
             foreach (var d in displays)
+            {
+                if (d.Visible && d.IsHandleCreated)
+                {
+                    d.UpdateView();
+                    shown = true;
+                }
+            }
+            foreach (var d in scopes)
             {
                 if (d.Visible && d.IsHandleCreated)
                 {

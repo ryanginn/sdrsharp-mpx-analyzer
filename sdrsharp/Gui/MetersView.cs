@@ -58,7 +58,7 @@ namespace SDRSharp.MPXAnalyzer.Gui
         }
 
         // Level in kHz, or in percent where 100% = 75kHz. Subcarrier levels get an extra decimal in kHz
-        static string FormatLevel(float khz, bool percent, bool subcarrier)
+        internal static string FormatLevel(float khz, bool percent, bool subcarrier)
         {
             if (percent) { return string.Format("{0:0.0} %", 100.0f * khz / MAX_DEV_KHZ); }
             return string.Format(subcarrier ? "{0:0.00} kHz" : "{0:0.0} kHz", khz);
