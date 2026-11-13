@@ -51,7 +51,7 @@ The demodulated signal is resampled from SDR#'s IQ rate (typically 250–500 kS/
 - **Accuracy:** a slow DC filter removes any carrier offset first, so slight mistuning doesn't affect the readings. SDR#'s IF filter does affect them; use a wide bandwidth on a clean signal for measurements.
 
 **MPX Scope** (a separate dock panel):
-- **Scope:** the MPX, or the decoded **L**, **R**, **L+R** or **L−R**, picked on the right (MPX by default), with a time base from 1 to 100 ms. The trace fades out slowly like a phosphor screen. Dashed lines mark ±100% (±75 kHz); anything beyond them is drawn red. The scale follows the *Level units* setting.
+- **Scope:** the MPX, or the decoded **L**, **R**, **L+R** or **L−R**, picked on the right (MPX by default), with a time base from 1 to 100 ms. The trace is drawn in SDR's spectrum fill colour (blue by default) and fades out slowly like a phosphor screen. Dashed lines mark ±100% (±75 kHz); anything beyond them is drawn red. The scale follows the *Level units* setting.
   - **L+R and L−R** are shown as (L+R)/2 and (L−R)/2: each one's share of the deviation, on the same scale as the MPX.
 - **+ Mod / − Mod:** the positive and negative peak deviation over the last second, with the same peak response time as the Deviation meter. A composite clipper shows up as flat, nearly equal peaks; asymmetric modulation as different ones. Red above 100%.
 - **De-mod L / R:** the peaks of the decoded left and right channels over the last second, as transmitted (no de-emphasis), in deviation units. With a 9% pilot, full-scale audio reads 91% (68.25 kHz). Amber above 100% minus the pilot (all the audio can use), red above 100%. Shows "mono" when there's no pilot (L = R).

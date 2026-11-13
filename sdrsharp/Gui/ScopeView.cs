@@ -11,7 +11,6 @@ namespace SDRSharp.MPXAnalyzer.Gui
     {
         const float RANGE = 1.25f;          // Vertical range, +/- this (1.0 = 75kHz)
         const int FADE_ALPHA = 70;          // Persistence: how much of the old trace each update wipes (0-255)
-        static readonly Color TraceColor = Color.FromArgb(40, 230, 70);
 
         float[] samples = new float[0];
         int count;
@@ -75,7 +74,8 @@ namespace SDRSharp.MPXAnalyzer.Gui
             if (!valid) { return; }
 
             int w = persist.Width;
-            using var pen = new Pen(TraceColor);
+            // SDR#'s spectrum fill colour (blue by default), opaque, so the scope matches the spectra
+            using var pen = new Pen(Color.FromArgb(255, Theme.Fill));
             using var overPen = new Pen(Theme.Over);
             float top = Y(1.0f), bottom = Y(-1.0f);
 
