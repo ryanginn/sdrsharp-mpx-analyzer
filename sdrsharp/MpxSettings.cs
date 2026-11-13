@@ -26,6 +26,11 @@ namespace SDRSharp.MPXAnalyzer
         public WavSampleType SampleType { get; set; } = WavSampleType.Int16;
         public int ScopeSignal { get; set; }                // Dsp.ScopeSignal, MPX by default
         public int ScopeTimeMs { get; set; } = 10;
+        public bool ShowScopeWindow { get; set; }           // Older SDR# only: floating scope window open
+        public int ScopeWindowX { get; set; } = int.MinValue;
+        public int ScopeWindowY { get; set; } = int.MinValue;
+        public int ScopeWindowWidth { get; set; } = 760;
+        public int ScopeWindowHeight { get; set; } = 320;
         public int WindowX { get; set; } = int.MinValue;
         public int WindowY { get; set; } = int.MinValue;
         public int WindowWidth { get; set; } = 760;
@@ -179,6 +184,8 @@ namespace SDRSharp.MPXAnalyzer
             if (!Enum.IsDefined(typeof(WavSampleType), SampleType)) { SampleType = WavSampleType.Int16; }
             WindowWidth = Math.Max(WindowWidth, 480);
             WindowHeight = Math.Max(WindowHeight, 300);
+            ScopeWindowWidth = Math.Max(ScopeWindowWidth, 480);
+            ScopeWindowHeight = Math.Max(ScopeWindowHeight, 240);
             return this;
         }
     }

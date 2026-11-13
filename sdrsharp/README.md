@@ -96,11 +96,12 @@ Both contain a file called `SDRSharp.MPXAnalyzer.dll`; use the one that matches 
    <add key="MPX Analyzer" value="SDRSharp.MPXAnalyzer.MpxPlugin,SDRSharp.MPXAnalyzer" />
    ```
    Even older versions without `Plugins.xml` have the same `<sharpPlugins>` section in `SDRSharp.exe.config`.
-   For the scope, add this line too (it then appears as a side panel):
+4. Start SDR#. **MPX Analyzer** appears among the plugin panels. Its **Show MPX window** and **Show scope window** buttons open the spectrum and the scope in floating windows.
+
+   To have the scope as a side panel instead of a window, add this line too:
    ```xml
    <add key="MPX Scope" value="SDRSharp.MPXAnalyzer.MpxScopePlugin,SDRSharp.MPXAnalyzer" />
    ```
-4. Start SDR#. **MPX Analyzer** (and **MPX Scope**) appear among the plugin panels.
 
 If SDR# is updated to a new .NET version, rebuild the plugin (or download a newer build).
 
@@ -109,7 +110,7 @@ If SDR# is updated to a new .NET version, rebuild the plugin (or download a newe
 1. Tune SDR# to an FM broadcast station in **WFM** mode, and set the filter bandwidth to about 200–250 kHz.
 2. Open the spectrum:
    - **Current SDR#:** open *Plugins* → *Analysis : MPX Spectrum*, then dock it where you like. SDR# remembers the layout.
-   - **Older SDR#** (no dock panels): open the **MPX Analyzer** panel and press **Show MPX window**. The window remembers its position, and reopens with SDR# if it was open when SDR# closed.
+   - **Older SDR#** (no dock panels): open the **MPX Analyzer** panel and press **Show MPX window** (and **Show scope window** for the scope). The windows remember their positions, and reopen with SDR# if they were open when SDR# closed.
 3. The spectrum follows SDR#'s theme (dark or light, changed while running too) and its spectrum display settings: spectrum style (gradient, solid fill or line), gradient, envelope, fill and peak colours, drawn the way SDR#'s own spectra draw them. The peak hold trace uses SDR#'s peak colour.
 4. The spectrum uses the panel's full height. The column on its right has:
    - the record button at the top
@@ -125,6 +126,7 @@ If SDR# is updated to a new .NET version, rebuild the plugin (or download a newe
 | Option | Description |
 |---|---|
 | Show MPX window | Older SDR# only: opens or hides the spectrum window (current SDR# has the MPX Spectrum dock panel instead) |
+| Show scope window | Older SDR# only, unless the MPX Scope line is in `Plugins.xml`: opens or hides the scope window (current SDR# has the MPX Scope dock panel instead) |
 | Averaging | Number of FFT frames averaged (about 94 frames/s) |
 | Max freq | Upper edge of the display (20–96 kHz) |
 | dB max / dB min | Vertical scale |

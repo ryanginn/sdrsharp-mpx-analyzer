@@ -156,7 +156,8 @@ static class Program
         plugin.Core.ShowWindow(true, host);
 #endif
 
-        // The scope plugin panel (a dock panel in current SDR#, a Plugins.xml side panel in older SDR#)
+#if NETCOREAPP
+        // Current SDR#: the MPX Scope plugin panel
         var scopePlugin = new MpxScopePlugin();
         scopePlugin.Initialize(control);
         Console.WriteLine($"Plugin: {scopePlugin.DisplayName}");
@@ -165,6 +166,15 @@ static class Program
         scopeGui.Dock = DockStyle.Fill;
         scopeHost.Controls.Add(scopeGui);
         scopeHost.Show();
+#else
+        // Older SDR# (scope plugin not in Plugins.xml): floating scope window, opened from the panel
+        plugin.Core.ShowScopeWindow(true, host);
+        Form scopeHost = null;
+        foreach (Form f in Application.OpenForms) { if (f is SDRSharp.MPXAnalyzer.Gui.ScopeWindow) { scopeHost = f; } }
+        if (scopeHost == null) { Console.WriteLine("FAIL: no scope window"); return 1; }
+        scopeHost.StartPosition = FormStartPosition.Manual;
+        scopeHost.Bounds = new Rectangle(300, 420, 900, 300);
+#endif
 
         // FM signal: 9% pilot, 40% 1kHz tone, 20% 39.5kHz (L-R like), 4% 57kHz tone. Continuous phase like a real
         // transmitter; fed at about real time from a separate thread like SDR#'s DSP thread
@@ -232,8 +242,10 @@ static class Program
 #if NETCOREAPP
         spectrumPlugin.Close();
 #endif
+#if NETCOREAPP
         scopePlugin.Close();
         scopeHost.Close();
+#endif
         plugin.Close();
         host.Close();
         Console.WriteLine(failures == 0 ? "Smoke test passed" : "Smoke test FAILED");

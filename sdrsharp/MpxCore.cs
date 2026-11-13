@@ -28,6 +28,7 @@ namespace SDRSharp.MPXAnalyzer
         readonly List<ScopeDisplay> scopes = new List<ScopeDisplay>();
         System.Windows.Forms.Timer timer;
         MpxWindow window;
+        ScopeWindow scopeWindow;
 
         // Retune detection, and the frequency for file names (read on the GUI thread, used on the DSP thread)
         long frequency;
@@ -73,6 +74,12 @@ namespace SDRSharp.MPXAnalyzer
                 window.CloseForGood();
                 window = null;
             }
+            if (scopeWindow != null)
+            {
+                SaveScopeWindowBounds();
+                scopeWindow.CloseForGood();
+                scopeWindow = null;
+            }
             settings.Save();
         }
 
@@ -85,6 +92,9 @@ namespace SDRSharp.MPXAnalyzer
         // SDR# loaded the MPX Spectrum dock panel plugin. If not (SDR# that only loads the plugins listed in
         // Plugins.xml, e.g. 1716), the spectrum is shown in a floating window instead
         public bool SpectrumPanelLoaded { get; set; }
+
+        // SDR# loaded the MPX Scope plugin. If not, the scope is shown in a floating window instead
+        public bool ScopePanelLoaded { get; set; }
 
         public void SaveSettings() => settings.Save();
 
@@ -141,6 +151,7 @@ namespace SDRSharp.MPXAnalyzer
                     foreach (var d in displays) { d.ApplyTheme(); }
                     foreach (var d in scopes) { d.ApplyTheme(); }
                     window?.ApplyTheme();
+                    scopeWindow?.ApplyTheme();
                 }
             }
 
@@ -219,6 +230,60 @@ namespace SDRSharp.MPXAnalyzer
             settings.WindowY = window.Top;
             settings.WindowWidth = window.Width;
             settings.WindowHeight = window.Height;
+        }
+
+        // ---- Floating scope window (older SDR# without the MPX Scope plugin) ----
+
+        public bool ScopeWindowVisible => scopeWindow != null && scopeWindow.Visible;
+
+        public void ShowScopeWindow(bool show, IWin32Window owner = null)
+        {
+            settings.ShowScopeWindow = show;
+            settings.Save();
+            if (show)
+            {
+                if (scopeWindow == null || scopeWindow.IsDisposed)
+                {
+                    scopeWindow = new ScopeWindow(this);
+                    var b = new System.Drawing.Rectangle(settings.ScopeWindowX, settings.ScopeWindowY, settings.ScopeWindowWidth, settings.ScopeWindowHeight);
+                    if (settings.ScopeWindowX != int.MinValue && IsOnScreen(b))
+                    {
+                        scopeWindow.StartPosition = FormStartPosition.Manual;
+                        scopeWindow.Bounds = b;
+                    }
+                    else
+                    {
+                        scopeWindow.Size = b.Size;
+                    }
+                }
+                if (!scopeWindow.Visible)
+                {
+                    if (owner != null) { scopeWindow.Show(owner); } else { scopeWindow.Show(); }
+                }
+                scopeWindow.Activate();
+            }
+            else if (scopeWindow != null && scopeWindow.Visible)
+            {
+                SaveScopeWindowBounds();
+                scopeWindow.Hide();
+            }
+        }
+
+        // Called when the user closes the scope window
+        public void OnScopeWindowClosed()
+        {
+            SaveScopeWindowBounds();
+            settings.ShowScopeWindow = false;
+            settings.Save();
+        }
+
+        void SaveScopeWindowBounds()
+        {
+            if (scopeWindow == null || scopeWindow.WindowState != FormWindowState.Normal) { return; }
+            settings.ScopeWindowX = scopeWindow.Left;
+            settings.ScopeWindowY = scopeWindow.Top;
+            settings.ScopeWindowWidth = scopeWindow.Width;
+            settings.ScopeWindowHeight = scopeWindow.Height;
         }
 
         static bool IsOnScreen(System.Drawing.Rectangle r)
