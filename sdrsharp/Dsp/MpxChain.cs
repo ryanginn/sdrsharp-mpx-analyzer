@@ -111,7 +111,20 @@ namespace SDRSharp.MPXAnalyzer.Dsp
         const int SCOPE_AUDIO_LEN = (int)(StereoDecoder.OUT_RATE * SCOPE_SECONDS);
 
         // ---- Demodulator and resampler (DSP thread) ----
-        MpxResampler resampler;
+        MpxFrontEnd frontEnd;       // null while the one for the current IQ rate is being built
+
+        // Front ends are designed on a background thread: the design takes a noticeable time at high IQ rates, and
+        // doing it on SDR#'s DSP thread stalled SDR# (IQ, waterfall and audio) every time the rate changed, e.g.
+        // several times while dragging the filter bandwidth. The last few are kept for switching back and forth
+        const int FRONT_END_CACHE = 6;
+        readonly object buildLock = new object();
+        readonly System.Collections.Generic.List<MpxFrontEnd> frontEndCache = new System.Collections.Generic.List<MpxFrontEnd>();
+        double buildPending;        // Rate wanted by the DSP thread (0 = nothing to build)
+        bool building;
+        volatile MpxFrontEnd frontEndReady;
+
+        // Build front ends on the calling thread (tests, which feed signals faster than real time)
+        public static bool BuildInline;
         double iqRate;
         float prevRe = 1.0f, prevIm = 0.0f;
         float[] demodBuf = new float[0];
@@ -284,11 +297,22 @@ namespace SDRSharp.MPXAnalyzer.Dsp
         {
             if (length <= 0 || sampleRate <= 0.0) { return; }
 
-            if (resampler == null || sampleRate != iqRate)
+            if (sampleRate != iqRate)
             {
-                resampler = new MpxResampler(sampleRate, SAMPLERATE, RESAMP_CUTOFF, RESAMP_TRANS);
                 iqRate = sampleRate;
+                frontEnd = null;
+                RequestFrontEnd(sampleRate);
                 Interlocked.Exchange(ref measReset, 1);
+            }
+            if (frontEnd == null)
+            {
+                var ready = frontEndReady;
+                if (ready != null && ready.Rate == sampleRate)
+                {
+                    ready.Reset();
+                    frontEnd = ready;
+                    Interlocked.Exchange(ref measReset, 1);
+                }
             }
 
             // Polar discriminator, scaled so that +/-1.0 = +/-75kHz
@@ -307,10 +331,69 @@ namespace SDRSharp.MPXAnalyzer.Dsp
             prevRe = pr;
             prevIm = pi;
 
-            int maxOut = resampler.MaxOutput(length);
+            // Nothing to output until the front end for this rate is ready (normally well under a second)
+            if (frontEnd == null) { return; }
+            int maxOut = frontEnd.MaxOutput(length);
             if (mpxBuf.Length < maxOut) { mpxBuf = new float[maxOut]; }
-            int count = resampler.Process(demodBuf, length, mpxBuf);
+            int count = frontEnd.Process(demodBuf, length, mpxBuf);
             if (count > 0) { ProcessMpx(mpxBuf, count); }
+        }
+
+        // IQ rate -> MPX decimation used before the resampler (1 = none; 0 while being built)
+        public int FrontEndDecimation => frontEnd?.Decimation ?? 0;
+
+        // Makes a front end for `rate` available through frontEndReady: from the cache, or built on a background
+        // thread. Only the latest request matters, so rates passed while dragging the bandwidth are skipped
+        void RequestFrontEnd(double rate)
+        {
+            lock (buildLock)
+            {
+                var cached = frontEndCache.Find(f => f.Rate == rate);
+                if (cached != null)
+                {
+                    frontEndReady = cached;
+                    buildPending = 0.0;
+                    return;
+                }
+                buildPending = rate;
+                if (BuildInline)
+                {
+                    BuildPending();
+                    return;
+                }
+                if (building) { return; }
+                building = true;
+            }
+            var t = new Thread(() =>
+            {
+                try { BuildPending(); }
+                finally { lock (buildLock) { building = false; } }
+            }) { IsBackground = true, Priority = ThreadPriority.BelowNormal, Name = "MPX front end design" };
+            t.Start();
+        }
+
+        void BuildPending()
+        {
+            while (true)
+            {
+                double rate;
+                lock (buildLock)
+                {
+                    rate = buildPending;
+                    if (rate <= 0.0) { return; }
+                }
+                var fe = new MpxFrontEnd(rate, SAMPLERATE, RESAMP_CUTOFF, RESAMP_TRANS);
+                lock (buildLock)
+                {
+                    frontEndCache.Add(fe);
+                    if (frontEndCache.Count > FRONT_END_CACHE) { frontEndCache.RemoveAt(0); }
+                    if (buildPending == rate)
+                    {
+                        frontEndReady = fe;
+                        buildPending = 0.0;
+                    }
+                }
+            }
         }
 
         // 192kHz MPX, +/-1.0 = 75kHz deviation

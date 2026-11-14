@@ -48,6 +48,7 @@ The demodulated signal is resampled from SDR#'s IQ rate (typically 250–500 kS/
 - **Pilot freq:** the pilot frequency, to 0.1 Hz, averaged over 1 second. Green within ITU-R BS.450's 19 kHz ±2 Hz, amber beyond that, red beyond ±20 Hz. The reading depends on the SDR's sample clock: correct its ppm error in SDR# for an exact value (1 ppm = 0.019 Hz).
 - **CPU use:** the spectrum, scope and measurements are only computed while the MPX Spectrum or MPX Scope panel (or window) is on screen. Recording carries on when it's closed or hidden behind another tab. Showing it again restarts the measurements.
 - **Reset:** the measurements restart automatically when the frequency, the filter bandwidth or the IQ rate changes. *Reset* under the meters restarts them by hand.
+- **Wide filter / high IQ rates:** above 800 kS/s the demodulated signal is first decimated to 400–800 kHz (flat to 96 kHz, aliases more than 100 dB down), which keeps the CPU load low. The filters for a new IQ rate are designed on a background thread, so changing SDR#'s bandwidth never stalls SDR#. The MPX pauses for a fraction of a second while that happens. A filter much wider than the station lets adjacent stations into the MPX, so 200–250 kHz is still best for measurements.
 - **Accuracy:** a slow DC filter removes any carrier offset first, so slight mistuning doesn't affect the readings. SDR#'s IF filter does affect them; use a wide bandwidth on a clean signal for measurements.
 
 **MPX Scope** (a separate dock panel):

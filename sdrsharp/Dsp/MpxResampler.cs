@@ -25,8 +25,11 @@ namespace SDRSharp.MPXAnalyzer.Dsp
         int histLen;
         double pos;                 // Position of the next output sample in hist (input sample units)
 
-        public MpxResampler(double inRate, double outRate, double cutoff, double transWidth)
+        // `demodRate` is the FM demodulator's rate, whose droop is corrected (the input rate unless the demodulator
+        // output was decimated first)
+        public MpxResampler(double inRate, double outRate, double cutoff, double transWidth, double demodRate = 0.0)
         {
+            if (demodRate <= 0.0) { demodRate = inRate; }
             this.inRate = inRate;
             step = inRate / outRate;
 
@@ -40,7 +43,7 @@ namespace SDRSharp.MPXAnalyzer.Dsp
             var gain = new double[DESIGN_STEPS];
             for (int k = 0; k < DESIGN_STEPS; k++)
             {
-                double x = Math.PI * ((k + 0.5) * df) / inRate;
+                double x = Math.PI * ((k + 0.5) * df) / demodRate;
                 gain[k] = x / Math.Sin(x);
             }
 

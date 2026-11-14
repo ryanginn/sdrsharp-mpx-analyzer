@@ -150,6 +150,8 @@ static class Program
 
     static void Main()
     {
+        // Signals are fed faster than real time: build the front ends right away instead of in the background
+        MpxChain.BuildInline = true;
         var sw = Stopwatch.StartNew();
         foreach (double fs in new[] { 312500.0, 250000.0, 500000.0, 384000.0, 200000.0 })
         {
@@ -217,6 +219,26 @@ static class Program
             CheckBool("mono pilot present", m.PilotPresent, false);
             CheckBool("mono RDS present", m.RdsPresent, false);
             Check("1k 50% deviation kHz", m.PeakDevKHz, 37.5, 0.1);
+        }
+
+        // Wide SDR# filter: high IQ rates are decimated before the resampler. Same accuracy as at normal rates
+        foreach (double fs in new[] { 1000000.0, 2400000.0 })
+        {
+            Console.WriteLine($"Wide IQ rate {fs / 1000:F0} kS/s");
+            var sig = new Signal { PilotPct = 9.0, RdsPct = 4.0, RdsPhaseDeg = 30.0 };
+            sig.Tones.Add((1000.0, 40.0));
+            sig.Tones.Add((38000.0 + 1500.0, 20.0));
+            sig.Tones.Add((80000.0, 5.0));
+            var t = Stopwatch.StartNew();
+            var fe = new MpxFrontEnd(fs, MpxChain.SAMPLERATE, MpxChain.RESAMP_CUTOFF, MpxChain.RESAMP_TRANS);
+            Console.WriteLine($"  front end design {t.Elapsed.TotalMilliseconds:F0} ms, decimation {fe.Decimation}");
+            var chain = Run(sig, fs, 3.0, out double dbr, out double peakPct);
+            chain.GetMeasurements(out var m);
+            Check("pilot kHz", m.PilotKHz, 6.75, 0.03);
+            Check("pilot Hz", m.PilotFreqHz, 19000.0, 0.01);
+            Check("MPX power dBr", m.PowerDBr, dbr, 0.05);
+            Check("RDS kHz", m.RdsKHz, 3.0 * 1.51 / 1.444, 0.12);
+            CheckBool("RDS locked", m.Locked, true);
         }
 
         // Noisy signal: RDS level corrected for noise
