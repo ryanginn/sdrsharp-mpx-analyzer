@@ -132,7 +132,7 @@ If SDR# is updated to a new .NET version, rebuild the plugin (or download a newe
 | Max freq | Upper edge of the display (20–96 kHz) |
 | dB max / dB min | Vertical scale |
 | Peak hold | Overlay the maximum level seen since the last reset |
-| Show markers | Show the Pilot / 38k / RDS / SCA markers on the spectrum |
+| Show markers | Show the Pilot (19k), 38k, RDS (57k) and SCA (67k, 76k, 92k) markers on the spectrum |
 | Level units | Show deviation, pilot and RDS levels in kHz (default) or percent, where 100% = 75 kHz. Hover over Pilot/RDS to see the other unit |
 | Peak response | Response time of the deviation peak meter: 125 µs (default, Europe), 1 ms (US) or Instant |
 | MPX limit (dBr) | MPX power above this is shown in amber (default 0 dBr) |
