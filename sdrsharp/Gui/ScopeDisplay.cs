@@ -94,7 +94,10 @@ namespace SDRSharp.MPXAnalyzer.Gui
         readonly RadioButton[] radios;
         readonly ComboBox timeCombo;
         readonly Label timeLabel;
+        readonly CheckBox holdCheck;
         readonly ToolTip toolTip = new ToolTip();
+        // The scope has its own, faster refresh than the spectrum (~64 fps: the Windows timer resolution is 15.6 ms)
+        readonly Timer timer = new Timer { Interval = 15 };
 
         internal ScopeDisplay(MpxCore core)
         {
@@ -106,6 +109,8 @@ namespace SDRSharp.MPXAnalyzer.Gui
             var s = core.Settings;
 
             scope = new ScopeView { Dock = DockStyle.Fill, Signal = (ScopeSignal)s.ScopeSignal, TimeMs = s.ScopeTimeMs };
+            // Right click toggles hold, like peak hold on the spectrum
+            scope.MouseUp += (o, e) => { if (e.Button == MouseButtons.Right) { holdCheck.Checked = !holdCheck.Checked; } };
             meters = new ScopeMeters { Dock = DockStyle.Top };
             toolTip.SetToolTip(meters, "Peaks over the last second, with the deviation response time set in the plugin panel.\n" +
                                        "+ / − Mod: positive and negative peaks of the composite: clipping shows as flat, equal peaks.\n" +
@@ -144,6 +149,14 @@ namespace SDRSharp.MPXAnalyzer.Gui
             };
             toolTip.SetToolTip(timeCombo, "Time across the scope");
             flow.Controls.Add(timeCombo);
+            holdCheck = new CheckBox { Text = "Hold", AutoSize = true, Margin = new Padding(3, 8, 3, 1) };
+            holdCheck.CheckedChanged += (o, e) =>
+            {
+                scope.Hold = holdCheck.Checked;
+                scope.Invalidate();
+            };
+            toolTip.SetToolTip(holdCheck, "Freeze the scope (right click on the scope also toggles it)");
+            flow.Controls.Add(holdCheck);
 
             side = new Panel { Dock = DockStyle.Right, Width = Math.Max(flow.PreferredSize.Width, timeCombo.Width + 8) + 4, Padding = new Padding(2) };
             side.Controls.Add(flow);
@@ -152,6 +165,9 @@ namespace SDRSharp.MPXAnalyzer.Gui
             Controls.Add(side);
             Controls.Add(meters);
             ApplyTheme();
+
+            timer.Tick += (o, e) => { if (Visible && IsHandleCreated) { UpdateView(); } };
+            timer.Start();
         }
 
         internal void ApplyTheme()
@@ -160,14 +176,15 @@ namespace SDRSharp.MPXAnalyzer.Gui
             ForeColor = Theme.Text;
             side.BackColor = Theme.Background;
             foreach (var rb in radios) { rb.ForeColor = Theme.Text; }
+            holdCheck.ForeColor = Theme.Text;
             timeLabel.ForeColor = Theme.Dim;
             scope.Clear();
             scope.Invalidate();
             meters.Invalidate();
         }
 
-        // Called by the GUI timer while visible
-        internal void UpdateView()
+        // Called by the scope's own timer while visible
+        void UpdateView()
         {
             var s = core.Settings;
             string msg = null;
@@ -184,6 +201,7 @@ namespace SDRSharp.MPXAnalyzer.Gui
         {
             if (disposing)
             {
+                timer.Dispose();
                 core.RemoveScope(this);
                 toolTip.Dispose();
             }

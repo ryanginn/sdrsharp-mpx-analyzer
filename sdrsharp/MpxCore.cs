@@ -167,13 +167,10 @@ namespace SDRSharp.MPXAnalyzer
                     shown = true;
                 }
             }
+            // Scopes refresh themselves (faster), they only need the analysis running
             foreach (var d in scopes)
             {
-                if (d.Visible && d.IsHandleCreated)
-                {
-                    d.UpdateView();
-                    shown = true;
-                }
+                if (d.Visible && d.IsHandleCreated) { shown = true; }
             }
             chain.SetAnalysis(shown);
         }

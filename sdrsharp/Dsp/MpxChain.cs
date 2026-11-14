@@ -105,8 +105,9 @@ namespace SDRSharp.MPXAnalyzer.Dsp
         // steady tone reads its full peak; short peaks read lower the shorter they are than the response time
         const double PEAK_RELEASE_SEC = 1.0;
 
-        // Scope history: the last 100ms of MPX (192kHz) and decoded M / S (48kHz)
-        public const double SCOPE_SECONDS = 0.1;
+        // Scope history: the last 300ms of MPX (192kHz) and decoded M / S (48kHz). The scope shows up to 100ms, and
+        // plays the signal out smoothly a little behind the newest samples (which arrive in bursts), see ScopeView
+        public const double SCOPE_SECONDS = 0.3;
         const int SCOPE_MPX_LEN = (int)(SAMPLERATE * SCOPE_SECONDS);
         const int SCOPE_AUDIO_LEN = (int)(StereoDecoder.OUT_RATE * SCOPE_SECONDS);
 
@@ -234,6 +235,7 @@ namespace SDRSharp.MPXAnalyzer.Dsp
         readonly float[] scopeMid = new float[SCOPE_AUDIO_LEN];
         readonly float[] scopeSide = new float[SCOPE_AUDIO_LEN];
         int scopeMpxPos, scopeAudioPos;
+        long scopeMpxTotal, scopeAudioTotal;    // Samples written so far
         bool scopeStereo;
 
         // ---- Shared with the GUI ----
@@ -778,6 +780,8 @@ namespace SDRSharp.MPXAnalyzer.Dsp
                     scopeMpx[scopeMpxPos] = data[i];
                     if (++scopeMpxPos == SCOPE_MPX_LEN) { scopeMpxPos = 0; }
                 }
+                scopeMpxTotal += count;
+                scopeAudioTotal += n;
                 for (int i = 0; i < n; i++)
                 {
                     scopeMid[scopeAudioPos] = mid[i];
@@ -791,28 +795,38 @@ namespace SDRSharp.MPXAnalyzer.Dsp
         // Sample rate of a scope signal
         public static double ScopeRate(ScopeSignal sig) => sig == ScopeSignal.Mpx ? SAMPLERATE : StereoDecoder.OUT_RATE;
 
-        // Copies the latest `count` samples of `sig` (oldest first, at most SCOPE_SECONDS) into `dest`. Returns the
-        // number copied. `stereoOut` tells whether the decoder has a pilot
-        public int GetScope(ScopeSignal sig, float[] dest, int count, out bool stereoOut)
+        // Copies `count` samples of `sig` (oldest first) ending at sample index `end` (samples since the start; the
+        // newest when < 0), clamped to the history kept. Returns the number copied; `newest` is the index just past
+        // the newest sample written, `end` the end actually used. `stereoOut` tells whether the decoder has a pilot
+        public int GetScope(ScopeSignal sig, float[] dest, int count, ref long end, out long newest, out bool stereoOut)
         {
             lock (scopeLock)
             {
                 stereoOut = scopeStereo;
-                if (sig == ScopeSignal.Mpx)
-                {
-                    count = Math.Min(Math.Min(count, SCOPE_MPX_LEN), dest.Length);
-                    for (int i = 0; i < count; i++) { dest[i] = scopeMpx[(scopeMpxPos - count + i + SCOPE_MPX_LEN) % SCOPE_MPX_LEN]; }
-                    return count;
-                }
-                count = Math.Min(Math.Min(count, SCOPE_AUDIO_LEN), dest.Length);
+                bool mpx = sig == ScopeSignal.Mpx;
+                int len = mpx ? SCOPE_MPX_LEN : SCOPE_AUDIO_LEN;
+                int pos = mpx ? scopeMpxPos : scopeAudioPos;
+                newest = mpx ? scopeMpxTotal : scopeAudioTotal;
+                count = (int)Math.Min(Math.Min(count, len), Math.Min(dest.Length, newest));
+                if (end < 0 || end > newest) { end = newest; }
+                if (end - count < newest - len) { end = newest - len + count; }
+                int back = (int)(newest - end);         // Samples between the end and the newest
                 for (int i = 0; i < count; i++)
                 {
-                    int k = (scopeAudioPos - count + i + SCOPE_AUDIO_LEN) % SCOPE_AUDIO_LEN;
+                    int k = ((pos - back - count + i) % len + len) % len;
+                    if (mpx) { dest[i] = scopeMpx[k]; continue; }
                     float m = scopeMid[k], sd = scopeSide[k];
                     dest[i] = sig == ScopeSignal.Left ? m + sd : sig == ScopeSignal.Right ? m - sd : sig == ScopeSignal.Mid ? m : sd;
                 }
                 return count;
             }
+        }
+
+        // The newest `count` samples
+        public int GetScope(ScopeSignal sig, float[] dest, int count, out bool stereoOut)
+        {
+            long end = -1;
+            return GetScope(sig, dest, count, ref end, out _, out stereoOut);
         }
 
         void FinishBlock()
