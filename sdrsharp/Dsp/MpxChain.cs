@@ -22,7 +22,15 @@ namespace SDRSharp.MPXAnalyzer.Dsp
         public float LockCoherence;     // 0..1, stability of the RDS/pilot phase difference
         public float LockPhaseDeg;      // RDS carrier phase relative to the 3rd pilot harmonic, -90..90
         public float LockSeconds;       // Seconds of data in the lock measurement (up to 5)
+        public float PosPeakKHz;        // Positive and negative peak deviation over the last 1s (same detector as
+        public float NegPeakKHz;        //   PeakDevKHz), to see asymmetric or clipped composite
+        public float DemodLKHz;         // Peak of the decoded L and R (no de-emphasis) over the last 1s, in
+        public float DemodRKHz;         //   deviation units: L = R = full scale with 9% pilot reads 68.25kHz
+        public bool Stereo;             // The stereo decoder has a pilot (L and R are mono otherwise)
     }
+
+    // Signals the scope can show
+    public enum ScopeSignal { Mpx, Left, Right, Mid, Side }
 
     // IQ from SDR# -> FM demodulator -> 192kHz MPX -> (WAV recorder, spectrum analyzer, measurements)
     public sealed class MpxChain : IDisposable
@@ -97,8 +105,27 @@ namespace SDRSharp.MPXAnalyzer.Dsp
         // steady tone reads its full peak; short peaks read lower the shorter they are than the response time
         const double PEAK_RELEASE_SEC = 1.0;
 
+        // Scope history: the last 300ms of MPX (192kHz) and decoded M / S (48kHz). The scope shows up to 100ms, and
+        // plays the signal out smoothly a little behind the newest samples (which arrive in bursts), see ScopeView
+        public const double SCOPE_SECONDS = 0.3;
+        const int SCOPE_MPX_LEN = (int)(SAMPLERATE * SCOPE_SECONDS);
+        const int SCOPE_AUDIO_LEN = (int)(StereoDecoder.OUT_RATE * SCOPE_SECONDS);
+
         // ---- Demodulator and resampler (DSP thread) ----
-        MpxResampler resampler;
+        MpxFrontEnd frontEnd;       // null while the one for the current IQ rate is being built
+
+        // Front ends are designed on a background thread: the design takes a noticeable time at high IQ rates, and
+        // doing it on SDR#'s DSP thread stalled SDR# (IQ, waterfall and audio) every time the rate changed, e.g.
+        // several times while dragging the filter bandwidth. The last few are kept for switching back and forth
+        const int FRONT_END_CACHE = 6;
+        readonly object buildLock = new object();
+        readonly System.Collections.Generic.List<MpxFrontEnd> frontEndCache = new System.Collections.Generic.List<MpxFrontEnd>();
+        double buildPending;        // Rate wanted by the DSP thread (0 = nothing to build)
+        bool building;
+        volatile MpxFrontEnd frontEndReady;
+
+        // Build front ends on the calling thread (tests, which feed signals faster than real time)
+        public static bool BuildInline;
         double iqRate;
         float prevRe = 1.0f, prevIm = 0.0f;
         float[] demodBuf = new float[0];
@@ -194,6 +221,23 @@ namespace SDRSharp.MPXAnalyzer.Dsp
         Complex freqVec;
         readonly Complex[] freqRing = new Complex[PEAK_BLOCKS];
 
+        // Stereo decoder, demodulated and +/- peaks (DSP thread)
+        readonly StereoDecoder stereo = new StereoDecoder();
+        float posDet, negDet, demodDetL, demodDetR;
+        float demodAttack, demodRelease;
+        float blkPos, blkNeg, blkDemodL, blkDemodR;
+        readonly float[] posRing = new float[PEAK_BLOCKS], negRing = new float[PEAK_BLOCKS];
+        readonly float[] demodLRing = new float[PEAK_BLOCKS], demodRRing = new float[PEAK_BLOCKS];
+
+        // Scope history (written on the DSP thread, read by the GUI under scopeLock)
+        readonly object scopeLock = new object();
+        readonly float[] scopeMpx = new float[SCOPE_MPX_LEN];
+        readonly float[] scopeMid = new float[SCOPE_AUDIO_LEN];
+        readonly float[] scopeSide = new float[SCOPE_AUDIO_LEN];
+        int scopeMpxPos, scopeAudioPos;
+        long scopeMpxTotal, scopeAudioTotal;    // Samples written so far
+        bool scopeStereo;
+
         // ---- Shared with the GUI ----
         readonly object measLock = new object();
         MpxMeasurements measOut;
@@ -255,11 +299,22 @@ namespace SDRSharp.MPXAnalyzer.Dsp
         {
             if (length <= 0 || sampleRate <= 0.0) { return; }
 
-            if (resampler == null || sampleRate != iqRate)
+            if (sampleRate != iqRate)
             {
-                resampler = new MpxResampler(sampleRate, SAMPLERATE, RESAMP_CUTOFF, RESAMP_TRANS);
                 iqRate = sampleRate;
+                frontEnd = null;
+                RequestFrontEnd(sampleRate);
                 Interlocked.Exchange(ref measReset, 1);
+            }
+            if (frontEnd == null)
+            {
+                var ready = frontEndReady;
+                if (ready != null && ready.Rate == sampleRate)
+                {
+                    ready.Reset();
+                    frontEnd = ready;
+                    Interlocked.Exchange(ref measReset, 1);
+                }
             }
 
             // Polar discriminator, scaled so that +/-1.0 = +/-75kHz
@@ -278,10 +333,69 @@ namespace SDRSharp.MPXAnalyzer.Dsp
             prevRe = pr;
             prevIm = pi;
 
-            int maxOut = resampler.MaxOutput(length);
+            // Nothing to output until the front end for this rate is ready (normally well under a second)
+            if (frontEnd == null) { return; }
+            int maxOut = frontEnd.MaxOutput(length);
             if (mpxBuf.Length < maxOut) { mpxBuf = new float[maxOut]; }
-            int count = resampler.Process(demodBuf, length, mpxBuf);
+            int count = frontEnd.Process(demodBuf, length, mpxBuf);
             if (count > 0) { ProcessMpx(mpxBuf, count); }
+        }
+
+        // IQ rate -> MPX decimation used before the resampler (1 = none; 0 while being built)
+        public int FrontEndDecimation => frontEnd?.Decimation ?? 0;
+
+        // Makes a front end for `rate` available through frontEndReady: from the cache, or built on a background
+        // thread. Only the latest request matters, so rates passed while dragging the bandwidth are skipped
+        void RequestFrontEnd(double rate)
+        {
+            lock (buildLock)
+            {
+                var cached = frontEndCache.Find(f => f.Rate == rate);
+                if (cached != null)
+                {
+                    frontEndReady = cached;
+                    buildPending = 0.0;
+                    return;
+                }
+                buildPending = rate;
+                if (BuildInline)
+                {
+                    BuildPending();
+                    return;
+                }
+                if (building) { return; }
+                building = true;
+            }
+            var t = new Thread(() =>
+            {
+                try { BuildPending(); }
+                finally { lock (buildLock) { building = false; } }
+            }) { IsBackground = true, Priority = ThreadPriority.BelowNormal, Name = "MPX front end design" };
+            t.Start();
+        }
+
+        void BuildPending()
+        {
+            while (true)
+            {
+                double rate;
+                lock (buildLock)
+                {
+                    rate = buildPending;
+                    if (rate <= 0.0) { return; }
+                }
+                var fe = new MpxFrontEnd(rate, SAMPLERATE, RESAMP_CUTOFF, RESAMP_TRANS);
+                lock (buildLock)
+                {
+                    frontEndCache.Add(fe);
+                    if (frontEndCache.Count > FRONT_END_CACHE) { frontEndCache.RemoveAt(0); }
+                    if (buildPending == rate)
+                    {
+                        frontEndReady = fe;
+                        buildPending = 0.0;
+                    }
+                }
+            }
         }
 
         // 192kHz MPX, +/-1.0 = 75kHz deviation
@@ -476,10 +590,15 @@ namespace SDRSharp.MPXAnalyzer.Dsp
                 peakResponseUsed = PeakResponse;
                 peakAttack = (peakResponseUsed > 0.0) ? (float)(1.0 - Math.Exp(-1.0 / (peakResponseUsed * SAMPLERATE))) : 0.0f;
                 peakRelease = (float)Math.Exp(-1.0 / (PEAK_RELEASE_SEC * SAMPLERATE));
+                posDet = negDet = demodDetL = demodDetR = 0.0f;
+                blkPos = blkNeg = blkDemodL = blkDemodR = 0.0f;
+                demodAttack = (peakResponseUsed > 0.0) ? (float)(1.0 - Math.Exp(-1.0 / (peakResponseUsed * StereoDecoder.OUT_RATE))) : 0.0f;
+                demodRelease = (float)Math.Exp(-1.0 / (PEAK_RELEASE_SEC * StereoDecoder.OUT_RATE));
                 lock (measLock) { measValid = false; }
             }
 
             MeasureRds(data, count);
+            MeasureStereo(data, count);
 
             for (int i = 0; i < count; i++)
             {
@@ -496,6 +615,18 @@ namespace SDRSharp.MPXAnalyzer.Dsp
                     ax = peakDet;
                 }
                 blkPeak = Math.Max(blkPeak, ax);
+
+                // Positive and negative peaks, same detector
+                float px = Math.Max(x, 0.0f), nx = Math.Max(-x, 0.0f);
+                if (peakAttack > 0.0f)
+                {
+                    posDet = (px > posDet) ? posDet + peakAttack * (px - posDet) : posDet * peakRelease;
+                    negDet = (nx > negDet) ? negDet + peakAttack * (nx - negDet) : negDet * peakRelease;
+                    px = posDet;
+                    nx = negDet;
+                }
+                blkPos = Math.Max(blkPos, px);
+                blkNeg = Math.Max(blkNeg, nx);
 
                 // Pilot: correlate with 19kHz over a windowed block
                 float wx = pilotWin[pilotCount] * x;
@@ -623,6 +754,81 @@ namespace SDRSharp.MPXAnalyzer.Dsp
             }
         }
 
+        // Stereo decoding for the scope and the demodulated L / R peaks
+        void MeasureStereo(float[] data, int count)
+        {
+            int n = stereo.Process(data, count);
+            float[] mid = stereo.Mid, side = stereo.Side;
+            for (int i = 0; i < n; i++)
+            {
+                float l = Math.Abs(mid[i] + side[i]), r = Math.Abs(mid[i] - side[i]);
+                if (demodAttack > 0.0f)
+                {
+                    demodDetL = (l > demodDetL) ? demodDetL + demodAttack * (l - demodDetL) : demodDetL * demodRelease;
+                    demodDetR = (r > demodDetR) ? demodDetR + demodAttack * (r - demodDetR) : demodDetR * demodRelease;
+                    l = demodDetL;
+                    r = demodDetR;
+                }
+                blkDemodL = Math.Max(blkDemodL, l);
+                blkDemodR = Math.Max(blkDemodR, r);
+            }
+
+            lock (scopeLock)
+            {
+                for (int i = 0; i < count; i++)
+                {
+                    scopeMpx[scopeMpxPos] = data[i];
+                    if (++scopeMpxPos == SCOPE_MPX_LEN) { scopeMpxPos = 0; }
+                }
+                scopeMpxTotal += count;
+                scopeAudioTotal += n;
+                for (int i = 0; i < n; i++)
+                {
+                    scopeMid[scopeAudioPos] = mid[i];
+                    scopeSide[scopeAudioPos] = side[i];
+                    if (++scopeAudioPos == SCOPE_AUDIO_LEN) { scopeAudioPos = 0; }
+                }
+                scopeStereo = stereo.Stereo;
+            }
+        }
+
+        // Sample rate of a scope signal
+        public static double ScopeRate(ScopeSignal sig) => sig == ScopeSignal.Mpx ? SAMPLERATE : StereoDecoder.OUT_RATE;
+
+        // Copies `count` samples of `sig` (oldest first) ending at sample index `end` (samples since the start; the
+        // newest when < 0), clamped to the history kept. Returns the number copied; `newest` is the index just past
+        // the newest sample written, `end` the end actually used. `stereoOut` tells whether the decoder has a pilot
+        public int GetScope(ScopeSignal sig, float[] dest, int count, ref long end, out long newest, out bool stereoOut)
+        {
+            lock (scopeLock)
+            {
+                stereoOut = scopeStereo;
+                bool mpx = sig == ScopeSignal.Mpx;
+                int len = mpx ? SCOPE_MPX_LEN : SCOPE_AUDIO_LEN;
+                int pos = mpx ? scopeMpxPos : scopeAudioPos;
+                newest = mpx ? scopeMpxTotal : scopeAudioTotal;
+                count = (int)Math.Min(Math.Min(count, len), Math.Min(dest.Length, newest));
+                if (end < 0 || end > newest) { end = newest; }
+                if (end - count < newest - len) { end = newest - len + count; }
+                int back = (int)(newest - end);         // Samples between the end and the newest
+                for (int i = 0; i < count; i++)
+                {
+                    int k = ((pos - back - count + i) % len + len) % len;
+                    if (mpx) { dest[i] = scopeMpx[k]; continue; }
+                    float m = scopeMid[k], sd = scopeSide[k];
+                    dest[i] = sig == ScopeSignal.Left ? m + sd : sig == ScopeSignal.Right ? m - sd : sig == ScopeSignal.Mid ? m : sd;
+                }
+                return count;
+            }
+        }
+
+        // The newest `count` samples
+        public int GetScope(ScopeSignal sig, float[] dest, int count, out bool stereoOut)
+        {
+            long end = -1;
+            return GetScope(sig, dest, count, ref end, out _, out stereoOut);
+        }
+
         void FinishBlock()
         {
             double meanSq = blkSumSq / METER_BLOCK;
@@ -631,6 +837,8 @@ namespace SDRSharp.MPXAnalyzer.Dsp
             blkPeak = 0.0f;
             blkCount = 0;
 
+            float pos = blkPos, neg = blkNeg, demodL = blkDemodL, demodR = blkDemodR;
+            blkPos = blkNeg = blkDemodL = blkDemodR = 0.0f;
             float pilotAmp = pilotAmpCount > 0 ? (float)(pilotAmpSum / pilotAmpCount) : 0.0f;
             pilotAmpSum = 0.0;
             pilotAmpCount = 0;
@@ -661,6 +869,10 @@ namespace SDRSharp.MPXAnalyzer.Dsp
             rdsDcRing[peakPos] = rdsDc;
             rdsTotRing[peakPos] = rdsTot;
             freqRing[peakPos] = blkFreqVec;
+            posRing[peakPos] = pos;
+            negRing[peakPos] = neg;
+            demodLRing[peakPos] = demodL;
+            demodRRing[peakPos] = demodR;
             peakPos = (peakPos + 1) % PEAK_BLOCKS;
 
             lockVecRing[lockPos] = blkLockVec;
@@ -682,6 +894,7 @@ namespace SDRSharp.MPXAnalyzer.Dsp
             float recentPeak = 0.0f;
             double pilotSum = 0.0, rdsDcSum = 0.0, rdsTotSum = 0.0;
             Complex freqSum = Complex.Zero;
+            float recentPos = 0.0f, recentNeg = 0.0f, recentL = 0.0f, recentR = 0.0f;
             for (int k = 0; k < peakFill; k++)
             {
                 recentPeak = Math.Max(recentPeak, peakRing[k]);
@@ -689,6 +902,10 @@ namespace SDRSharp.MPXAnalyzer.Dsp
                 rdsDcSum += rdsDcRing[k];
                 rdsTotSum += rdsTotRing[k];
                 freqSum += freqRing[k];
+                recentPos = Math.Max(recentPos, posRing[k]);
+                recentNeg = Math.Max(recentNeg, negRing[k]);
+                recentL = Math.Max(recentL, demodLRing[k]);
+                recentR = Math.Max(recentR, demodRRing[k]);
             }
 
             const double khz = DEVIATION / 1000.0;
@@ -699,8 +916,14 @@ namespace SDRSharp.MPXAnalyzer.Dsp
             meas.PeakDevKHz = (float)(recentPeak * khz);
             meas.MaxDevKHz = (float)(maxPeak * khz);
             meas.PeakResponseSec = (float)Math.Max(peakResponseUsed, 0.0);
+            meas.PosPeakKHz = (float)(recentPos * khz);
+            meas.NegPeakKHz = (float)(recentNeg * khz);
+            meas.DemodLKHz = (float)(recentL * khz);
+            meas.DemodRKHz = (float)(recentR * khz);
             meas.PilotKHz = (float)(pilotSum / peakFill * khz);
             meas.PilotPresent = meas.PilotKHz >= PILOT_MIN_KHZ;
+            stereo.Stereo = meas.PilotPresent;
+            meas.Stereo = stereo.Stereo;
             meas.PilotFreqHz = (float)(PILOT_FREQ + freqSum.Phase * (SAMPLERATE / RDS_DECIM) / (2.0 * Math.PI * FREQ_LAG));
 
             // RDS: split the band power into signal and noise using how much of each falls close to 57kHz:

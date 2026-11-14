@@ -10,8 +10,8 @@ namespace SDRSharp.MPXAnalyzer.Gui
     // and a cursor readout
     public sealed class SpectrumView : Control
     {
-        static readonly double[] MARKER_FREQS = { 19000.0, 38000.0, 57000.0, 67000.0, 92000.0 };
-        static readonly string[] MARKER_LABELS = { "Pilot", "38k", "RDS", "SCA", "SCA" };
+        static readonly double[] MARKER_FREQS = { 19000.0, 38000.0, 57000.0, 67000.0, 76000.0, 92000.0 };
+        static readonly string[] MARKER_LABELS = { "Pilot", "38k", "RDS", "SCA", "SCA", "SCA" };
 
         readonly float[] avg = new float[MpxChain.FFT_BINS];
         readonly float[] peak = new float[MpxChain.FFT_BINS];
@@ -113,6 +113,7 @@ namespace SDRSharp.MPXAnalyzer.Gui
             using (var markerPen = new Pen(Theme.Marker) { DashStyle = DashStyle.Dash })
             using (var markerBrush = new SolidBrush(Theme.Marker))
             {
+                float labelEnd = float.MinValue;
                 for (int k = 0; k < MARKER_FREQS.Length; k++)
                 {
                     double freq = MARKER_FREQS[k];
@@ -120,7 +121,12 @@ namespace SDRSharp.MPXAnalyzer.Gui
                     if (freq > span) { continue; }
                     float x = FToX(freq);
                     g.DrawLine(markerPen, x, plot.Top, x, plot.Bottom);
+                    // Skip a label that would run into the previous one (narrow display) or past the plot's edge; the
+                    // line still shows
+                    float w = g.MeasureString(label, Font).Width;
+                    if (x + 3 < labelEnd || x + 3 + w > plot.Right) { continue; }
                     g.DrawString(label, Font, markerBrush, x + 3, plot.Top + 2);
+                    labelEnd = x + 3 + w;
                 }
             }
 

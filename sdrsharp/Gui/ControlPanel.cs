@@ -12,6 +12,7 @@ namespace SDRSharp.MPXAnalyzer.Gui
         readonly MpxCore plugin;
         readonly TableLayoutPanel table;
         readonly Button showButton;     // Floating window, when there's no dock panel
+        readonly Button showScopeButton;    // Floating scope window, when SDR# didn't load the MPX Scope plugin
         readonly Label dockHint;
         readonly Label statusLabel;
         readonly Label warnLabel;
@@ -50,11 +51,15 @@ namespace SDRSharp.MPXAnalyzer.Gui
 
             // With the MPX Spectrum dock panel: a hint where to find it. Without (SDR# that doesn't load it, e.g.
             // 1716): a button for the floating window. Which one applies is set in UpdateStatus
-            dockHint = new Label { Text = "Spectrum and meters: Plugins menu > MPX Spectrum. Dock it like SDR#'s own spectra.", AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(3, 3, 3, 6), MaximumSize = new Size(260, 0) };
+            dockHint = new Label { Text = "Spectrum and meters: Plugins menu > MPX Spectrum. Scope: Plugins menu > MPX Scope. Dock them like SDR#'s own spectra.", AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(3, 3, 3, 6), MaximumSize = new Size(260, 0) };
             AddWide(dockHint);
             showButton = new Button { Text = "Show MPX window", Dock = DockStyle.Fill, AutoSize = true };
             showButton.Click += (o, e) => plugin.ShowWindow(!plugin.WindowVisible, FindForm());
             AddWide(showButton);
+            showScopeButton = new Button { Text = "Show scope window", Dock = DockStyle.Fill, AutoSize = true };
+            showScopeButton.Click += (o, e) => plugin.ShowScopeWindow(!plugin.ScopeWindowVisible, FindForm());
+            toolTip.SetToolTip(showScopeButton, "Oscilloscope of the MPX or the decoded L / R, with the + / − modulation and demodulated peaks");
+            AddWide(showScopeButton);
 
             statusLabel = new Label { AutoSize = true, Dock = DockStyle.Fill, ForeColor = SystemColors.GrayText };
             AddWide(statusLabel);
@@ -263,6 +268,8 @@ namespace SDRSharp.MPXAnalyzer.Gui
             dockHint.Visible = docked;
             showButton.Visible = !docked;
             showButton.Text = plugin.WindowVisible ? "Hide MPX window" : "Show MPX window";
+            showScopeButton.Visible = !plugin.ScopePanelLoaded;
+            showScopeButton.Text = plugin.ScopeWindowVisible ? "Hide scope window" : "Show scope window";
 
             double rate = chain.IqRate;
             int bw = plugin.FilterBandwidth;

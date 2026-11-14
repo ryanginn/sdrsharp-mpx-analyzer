@@ -150,6 +150,8 @@ static class Program
 
     static void Main()
     {
+        // Signals are fed faster than real time: build the front ends right away instead of in the background
+        MpxChain.BuildInline = true;
         var sw = Stopwatch.StartNew();
         foreach (double fs in new[] { 312500.0, 250000.0, 500000.0, 384000.0, 200000.0 })
         {
@@ -219,6 +221,26 @@ static class Program
             Check("1k 50% deviation kHz", m.PeakDevKHz, 37.5, 0.1);
         }
 
+        // Wide SDR# filter: high IQ rates are decimated before the resampler. Same accuracy as at normal rates
+        foreach (double fs in new[] { 1000000.0, 2400000.0 })
+        {
+            Console.WriteLine($"Wide IQ rate {fs / 1000:F0} kS/s");
+            var sig = new Signal { PilotPct = 9.0, RdsPct = 4.0, RdsPhaseDeg = 30.0 };
+            sig.Tones.Add((1000.0, 40.0));
+            sig.Tones.Add((38000.0 + 1500.0, 20.0));
+            sig.Tones.Add((80000.0, 5.0));
+            var t = Stopwatch.StartNew();
+            var fe = new MpxFrontEnd(fs, MpxChain.SAMPLERATE, MpxChain.RESAMP_CUTOFF, MpxChain.RESAMP_TRANS);
+            Console.WriteLine($"  front end design {t.Elapsed.TotalMilliseconds:F0} ms, decimation {fe.Decimation}");
+            var chain = Run(sig, fs, 3.0, out double dbr, out double peakPct);
+            chain.GetMeasurements(out var m);
+            Check("pilot kHz", m.PilotKHz, 6.75, 0.03);
+            Check("pilot Hz", m.PilotFreqHz, 19000.0, 0.01);
+            Check("MPX power dBr", m.PowerDBr, dbr, 0.05);
+            Check("RDS kHz", m.RdsKHz, 3.0 * 1.51 / 1.444, 0.12);
+            CheckBool("RDS locked", m.Locked, true);
+        }
+
         // Noisy signal: RDS level corrected for noise
         {
             Console.WriteLine("Noisy signal, 312.5 kS/s");
@@ -268,6 +290,86 @@ static class Program
             // Detector at 0.3 (tone peak) charges toward 1.0 for 50us: 0.3 + 0.7 * (1 - exp(-50/T))
             Check("50us spike, 125 us", readings[1], 75.0 * (0.3 + 0.7 * (1 - Math.Exp(-52.0 / 125.0))), 1.5);
             Check("50us spike, 1 ms", readings[2], 75.0 * (0.3 + 0.7 * (1 - Math.Exp(-52.0 / 1000.0))), 1.5);
+        }
+
+        // Stereo decoder: L only tone, demodulated levels, separation and the scope signals
+        {
+            Console.WriteLine("Stereo decoder");
+            foreach (double pilotOff in new[] { 0.0, 2.0 })
+            {
+                var chain = new MpxChain();
+                chain.SetPeakResponse(0.0);
+                var mpx = new float[19200];
+                double tp = 0.0;
+                for (int k = 0; k < 30; k++)
+                {
+                    for (int i = 0; i < mpx.Length; i++)
+                    {
+                        double t = (k * mpx.Length + i) / 192000.0;
+                        double l = 0.8 * Math.Sin(2.0 * Math.PI * 1000.0 * t), r = 0.0;
+                        tp += 2.0 * Math.PI * (19000.0 + pilotOff) / 192000.0;
+                        // ITU-R BS.450: M + S sin(2wt) + pilot sin(wt), 9% pilot, 91% audio
+                        mpx[i] = (float)(0.91 * ((l + r) / 2 + (l - r) / 2 * Math.Sin(2.0 * tp)) + 0.09 * Math.Sin(tp));
+                    }
+                    chain.ProcessMpx(mpx, mpx.Length);
+                }
+                chain.GetMeasurements(out var m);
+                CheckBool($"stereo, pilot {pilotOff:+0;-0;0} Hz", m.Stereo, true);
+                Check($"  demod L kHz", m.DemodLKHz, 0.91 * 0.8 * 75.0, 0.15);
+                // Separation better than 50dB
+                Check($"  demod R kHz", m.DemodRKHz, 0.0, 0.91 * 0.8 * 75.0 * 0.00316);
+
+                var buf = new float[4800];
+                int n = chain.GetScope(ScopeSignal.Left, buf, buf.Length, out bool st);
+                double sq = 0.0;
+                for (int i = 0; i < n; i++) { sq += buf[i] * buf[i]; }
+                Check($"  scope L rms", Math.Sqrt(sq / n), 0.91 * 0.8 / Math.Sqrt(2.0), 0.005);
+                n = chain.GetScope(ScopeSignal.Right, buf, buf.Length, out st);
+                sq = 0.0;
+                for (int i = 0; i < n; i++) { sq += buf[i] * buf[i]; }
+                Check($"  scope R rms", Math.Sqrt(sq / n), 0.0, 0.005);
+                n = chain.GetScope(ScopeSignal.Mpx, buf, buf.Length, out st);
+                Check($"  scope MPX count", n, buf.Length, 0);
+            }
+
+            // Mono: no pilot, L = R = M
+            {
+                var chain = new MpxChain();
+                chain.SetPeakResponse(0.0);
+                var mpx = new float[19200];
+                for (int k = 0; k < 15; k++)
+                {
+                    for (int i = 0; i < mpx.Length; i++) { mpx[i] = (float)(0.5 * Math.Sin(2.0 * Math.PI * 1000.0 * (k * mpx.Length + i) / 192000.0)); }
+                    chain.ProcessMpx(mpx, mpx.Length);
+                }
+                chain.GetMeasurements(out var m);
+                CheckBool("mono stereo flag", m.Stereo, false);
+                Check("  mono demod L kHz", m.DemodLKHz, 37.5, 0.2);
+                Check("  mono demod R kHz", m.DemodRKHz, 37.5, 0.2);
+            }
+
+            // Asymmetric waveform: separate + and - peaks
+            {
+                var chain = new MpxChain();
+                chain.SetPeakResponse(0.0);
+                var mpx = new float[19200];
+                double pos = 0.0, neg = 0.0;
+                for (int k = 0; k < 15; k++)
+                {
+                    for (int i = 0; i < mpx.Length; i++)
+                    {
+                        double w = 2.0 * Math.PI * 1000.0 * (k * mpx.Length + i) / 192000.0;
+                        double x = 0.6 * Math.Sin(w) + 0.25 * Math.Cos(2.0 * w);
+                        mpx[i] = (float)x;
+                        pos = Math.Max(pos, x);
+                        neg = Math.Max(neg, -x);
+                    }
+                    chain.ProcessMpx(mpx, mpx.Length);
+                }
+                chain.GetMeasurements(out var m);
+                Check("+ peak kHz", m.PosPeakKHz, pos * 75.0, 0.1);
+                Check("- peak kHz", m.NegPeakKHz, neg * 75.0, 0.1);
+            }
         }
 
         // Recording

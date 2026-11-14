@@ -156,6 +156,26 @@ static class Program
         plugin.Core.ShowWindow(true, host);
 #endif
 
+#if NETCOREAPP
+        // Current SDR#: the MPX Scope plugin panel
+        var scopePlugin = new MpxScopePlugin();
+        scopePlugin.Initialize(control);
+        Console.WriteLine($"Plugin: {scopePlugin.DisplayName}");
+        var scopeHost = new Form { Text = "MPX Scope (dock panel test host)", Width = 900, Height = 300, StartPosition = FormStartPosition.Manual, Location = new Point(300, 320) };
+        var scopeGui = scopePlugin.Gui;
+        scopeGui.Dock = DockStyle.Fill;
+        scopeHost.Controls.Add(scopeGui);
+        scopeHost.Show();
+#else
+        // Older SDR# (scope plugin not in Plugins.xml): floating scope window, opened from the panel
+        plugin.Core.ShowScopeWindow(true, host);
+        Form scopeHost = null;
+        foreach (Form f in Application.OpenForms) { if (f is SDRSharp.MPXAnalyzer.Gui.ScopeWindow) { scopeHost = f; } }
+        if (scopeHost == null) { Console.WriteLine("FAIL: no scope window"); return 1; }
+        scopeHost.StartPosition = FormStartPosition.Manual;
+        scopeHost.Bounds = new Rectangle(300, 420, 900, 300);
+#endif
+
         // FM signal: 9% pilot, 40% 1kHz tone, 20% 39.5kHz (L-R like), 4% 57kHz tone. Continuous phase like a real
         // transmitter; fed at about real time from a separate thread like SDR#'s DSP thread
         hook.SampleRate = FS;
@@ -197,12 +217,16 @@ static class Program
         if (!core.Chain.GetMeasurements(out var m)) { Console.WriteLine("FAIL: no measurements (spectrum display not detected as visible?)"); failures++; }
         Console.WriteLine($"IQ rate {core.Chain.IqRate}, pilot {m.PilotKHz:F3} kHz, peak dev {m.PeakDevKHz:F2} kHz, MPX power {m.PowerDBr:F2} dBr");
         if (Math.Abs(m.PilotKHz - 6.75) > 0.05) { Console.WriteLine("FAIL: pilot level"); failures++; }
+        Console.WriteLine($"Stereo {m.Stereo}, +/- peak {m.PosPeakKHz:F2} / {m.NegPeakKHz:F2} kHz, demod L/R {m.DemodLKHz:F2} / {m.DemodRKHz:F2} kHz");
+        if (!m.Stereo) { Console.WriteLine("FAIL: stereo decoder has no pilot"); failures++; }
+        if (m.DemodLKHz < 10.0f || m.DemodRKHz < 10.0f) { Console.WriteLine("FAIL: demodulated levels"); failures++; }
 
         // Screenshots
         Save(host, Path.Combine(outDir, "panel.png"));
         foreach (Form f in Application.OpenForms)
         {
-            if (f != host) { Save(f, Path.Combine(outDir, "mpx_window.png")); }
+            if (f == scopeHost) { Save(f, Path.Combine(outDir, "mpx_scope.png")); }
+            else if (f != host) { Save(f, Path.Combine(outDir, "mpx_window.png")); }
         }
 
         // Same display after switching SDR# to a light theme (picked up by the plugin within about a second)
@@ -211,11 +235,16 @@ static class Program
         while (wait.Elapsed.TotalSeconds < 1.5) { Application.DoEvents(); Thread.Sleep(10); }
         foreach (Form f in Application.OpenForms)
         {
-            if (f != host) { Save(f, Path.Combine(outDir, "mpx_window_light.png")); }
+            if (f == scopeHost) { Save(f, Path.Combine(outDir, "mpx_scope_light.png")); }
+            else if (f != host) { Save(f, Path.Combine(outDir, "mpx_window_light.png")); }
         }
 
 #if NETCOREAPP
         spectrumPlugin.Close();
+#endif
+#if NETCOREAPP
+        scopePlugin.Close();
+        scopeHost.Close();
 #endif
         plugin.Close();
         host.Close();
@@ -273,7 +302,18 @@ static class Program
     static void Save(Form f, string path)
     {
         using var bmp = new Bitmap(f.Width, f.Height);
-        f.DrawToBitmap(bmp, new Rectangle(0, 0, f.Width, f.Height));
+        if (Type.GetType("Mono.Runtime") != null)
+        {
+            // Mono's DrawToBitmap() skips child controls: grab the screen instead (e.g. under Xvfb on Linux)
+            f.Activate();
+            for (int i = 0; i < 20; i++) { Application.DoEvents(); Thread.Sleep(10); }
+            using var g = Graphics.FromImage(bmp);
+            g.CopyFromScreen(f.Location, Point.Empty, f.Size);
+        }
+        else
+        {
+            f.DrawToBitmap(bmp, new Rectangle(0, 0, f.Width, f.Height));
+        }
         bmp.Save(path, ImageFormat.Png);
         Console.WriteLine("Saved " + path);
     }

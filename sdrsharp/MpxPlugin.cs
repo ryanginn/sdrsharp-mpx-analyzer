@@ -54,6 +54,7 @@ namespace SDRSharp.MPXAnalyzer
             gui.HandleCreated += (s, e) => gui.BeginInvoke(new Action(() =>
             {
                 if (!core.SpectrumPanelLoaded && core.Settings.ShowWindow) { core.ShowWindow(true, gui.FindForm()); }
+                if (!core.ScopePanelLoaded && core.Settings.ShowScopeWindow) { core.ShowScopeWindow(true, gui.FindForm()); }
             }));
         }
 
@@ -122,6 +123,61 @@ namespace SDRSharp.MPXAnalyzer
         {
             if (core == null) { return; }
             if (gui != null) { core.RemoveDisplay(gui); }
+            MpxCore.Release();
+            core = null;
+        }
+
+        internal MpxCore Core => core;
+    }
+
+    // The oscilloscope (MPX or decoded L / R / L+R / L-R) with the +/- modulation and demodulated peaks, as its own
+    // dock panel like the spectrum. Old SDR# that only loads what Plugins.xml lists shows it as a side panel when
+    // it's listed there too; otherwise the settings panel opens it in a floating window
+#if NETCOREAPP
+    public class MpxScopePlugin : ISharpPlugin, ICanLazyLoadGui, IExtendedNameProvider, IPreferedDockPosition
+#else
+    public class MpxScopePlugin : ISharpPlugin
+#endif
+    {
+        MpxCore core;
+        ScopeDisplay gui;
+
+        public string DisplayName => "MPX Scope";
+
+        public string Category => "Analysis";
+
+        public string MenuItemName => DisplayName;
+
+        public DockStyle DockPosition => DockStyle.Bottom;
+
+        public bool IsActive => gui != null && gui.Visible;
+
+        public UserControl Gui
+        {
+            get
+            {
+                LoadGui();
+                return gui;
+            }
+        }
+
+        public void LoadGui()
+        {
+            if (gui != null) { return; }
+            gui = new ScopeDisplay(core);
+            core.AddScope(gui);
+        }
+
+        public void Initialize(ISharpControl control)
+        {
+            core = MpxCore.Acquire(control);
+            core.ScopePanelLoaded = true;
+        }
+
+        public void Close()
+        {
+            if (core == null) { return; }
+            if (gui != null) { core.RemoveScope(gui); }
             MpxCore.Release();
             core = null;
         }
